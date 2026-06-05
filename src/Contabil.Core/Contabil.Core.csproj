@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Núcleo de CONTABILIDADE compartilhado: resolução de apelidos e cálculo de
+    saldo de contas (fatia do balancete) a partir do MOVFIN/PLACON. Base para o
+    módulo de apropriações. netstandard2.0 para uso no net8 (tools) e net48 (app).
+    Referencia Imobilizado.Core só para reaproveitar o DbfReader.
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <RootNamespace>Contabil.Core</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Imobilizado.Core\Imobilizado.Core.csproj" />
+  </ItemGroup>
+
+</Project>

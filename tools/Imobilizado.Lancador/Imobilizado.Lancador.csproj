@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Lançador: calcula a depreciação do mês (Core) e grava no MOVFIN (Dados/VFPOLEDB).
+       net48 x86 porque o VFPOLEDB é 32-bit. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <PlatformTarget>x86</PlatformTarget>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <RootNamespace>Imobilizado.Lancador</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Imobilizado.Core\Imobilizado.Core.csproj" />
+    <ProjectReference Include="..\..\src\Imobilizado.Dados\Imobilizado.Dados.csproj" />
+  </ItemGroup>
+
+</Project>

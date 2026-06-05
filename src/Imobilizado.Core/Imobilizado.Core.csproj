@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Engine de imobilizado/depreciação, puro (sem UI, sem VFPOLEDB).
+    netstandard2.0 para poder ser referenciado tanto pelo reconciliador (net8)
+    quanto, no futuro, pela tela WinForms em .NET Framework 4.8.
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <RootNamespace>Imobilizado.Core</RootNamespace>
+  </PropertyGroup>
+
+</Project>

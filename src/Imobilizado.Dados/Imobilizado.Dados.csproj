@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Camada de gravação no MOVFIN via VFPOLEDB (driver Visual FoxPro, 32-bit).
+    Por isso: .NET Framework 4.8 + x86 (igual ao ApoioContabil2020). Autocontida —
+    NÃO depende do ApoioContabil2020; só espelha o padrão MAX(MOV_ID)+1 dele.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <PlatformTarget>x86</PlatformTarget>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <RootNamespace>Imobilizado.Dados</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Data" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Imobilizado.Core\Imobilizado.Core.csproj" />
+  </ItemGroup>
+
+</Project>

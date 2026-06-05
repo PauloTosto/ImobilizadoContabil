@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tela WinForms. net48 x86 porque grava via VFPOLEDB (Imobilizado.Dados). -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <PlatformTarget>x86</PlatformTarget>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <RootNamespace>Imobilizado.App</RootNamespace>
+    <AssemblyName>ImobilizadoContabil</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Imobilizado.Core\Imobilizado.Core.csproj" />
+    <ProjectReference Include="..\Imobilizado.Dados\Imobilizado.Dados.csproj" />
+    <ProjectReference Include="..\Contabil.Core\Contabil.Core.csproj" />
+  </ItemGroup>
+
+</Project>

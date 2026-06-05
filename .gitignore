@@ -1,0 +1,46 @@
+# ===== Build output =====
+bin/
+obj/
+[Bb]in/
+[Oo]bj/
+*.dll
+*.exe
+*.pdb
+
+# ===== Visual Studio / IDE =====
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.VC.db
+
+# ===== NuGet (restaurar com 'nuget restore' / 'dotnet restore') =====
+packages/
+*.nupkg
+
+# ===== DADOS DE PRODUÇÃO / SENSÍVEIS — NUNCA versionar =====
+# DBFs do ledger e plano de contas, snapshots, índices e memos do VFP.
+# Cada dev aponta para a SUA cópia local de teste (fora do git).
+*.dbf
+*.DBF
+*.cdx
+*.CDX
+*.fpt
+*.FPT
+# Planilhas (podem conter dados contábeis de terceiros). Um modelo/template
+# legítimo pode ser forçado com:  git add -f caminho/modelo.xlsx
+*.xls
+*.xlsx
+DADOS_ATUAIS/
+_testdata/
+
+# ===== Diagnóstico / temporários (gerados pelos modos --testcomposto, etc.) =====
+_smoke*.png
+_capture*.ps1
+_teste*.txt
+_mask*.txt
+composto*.png
+*.log
+*.tmp
+*.bak

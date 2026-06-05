@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Contabil.Core/Contabil.Core.csproj" />
+    <Project Path="src/Imobilizado.App/Imobilizado.App.csproj" />
+    <Project Path="src/Imobilizado.Core/Imobilizado.Core.csproj" />
+    <Project Path="src/Imobilizado.Dados/Imobilizado.Dados.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Apropriacao.Reconciliador/Apropriacao.Reconciliador.csproj" />
+    <Project Path="tools/Contabil.SaldoCheck/Contabil.SaldoCheck.csproj" />
+    <Project Path="tools/Contabil.ValidaPtpla/Contabil.ValidaPtpla.csproj" />
+    <Project Path="tools/Imobilizado.Lancador/Imobilizado.Lancador.csproj" />
+    <Project Path="tools/Imobilizado.Reconciliador/Imobilizado.Reconciliador.csproj" />
+  </Folder>
+</Solution>

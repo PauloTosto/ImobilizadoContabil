@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Console que prova o motor C# contra os lançamentos SIST_IMOB reais do MOVFIN. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <RootNamespace>Imobilizado.Reconciliador</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Imobilizado.Core\Imobilizado.Core.csproj" />
+  </ItemGroup>
+
+</Project>
