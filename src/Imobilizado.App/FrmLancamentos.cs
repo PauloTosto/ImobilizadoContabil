@@ -19,7 +19,7 @@ namespace Imobilizado.App
     {
         private TextBox txtPasta, txtFiltro;
         private DateTimePicker dtDe, dtAte;
-        private ComboBox cboTipo;
+        private ComboBox cboTipo, cboContab;
         private Button btnPasta, btnCarregar, btnIncluir, btnAlterar, btnExcluir, btnComposto;
         private DataGridView dgv;
         private Label lblResumo;
@@ -72,10 +72,14 @@ namespace Imobilizado.App
             btnExcluir = new Button { Text = "&Excluir", Location = new Point(266, 5), Width = 78, Enabled = false };
             btnExcluir.Click += (s, e) => Excluir();
             var lblF = new Label { Text = "Filtrar:", AutoSize = true, Location = new Point(360, 9) };
-            txtFiltro = new TextBox { Location = new Point(408, 6), Width = 230 };
+            txtFiltro = new TextBox { Location = new Point(408, 6), Width = 180 };
             txtFiltro.TextChanged += (s, e) => Exibir();
-            var lblFh = new Label { Text = "(conta, histórico, doc, emissor, forn.)", AutoSize = true, ForeColor = Color.DimGray, Location = new Point(646, 9) };
-            barra.Controls.AddRange(new Control[] { btnIncluir, btnComposto, btnAlterar, btnExcluir, lblF, txtFiltro, lblFh });
+            var lblC = new Label { Text = "Contabilidade:", AutoSize = true, Location = new Point(600, 9) };
+            cboContab = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 175, Location = new Point(688, 5) };
+            cboContab.Items.AddRange(new object[] { "Todos", "Válidos p/ contab.", "Pendentes (inválidos)" });
+            cboContab.SelectedIndex = 0;
+            cboContab.SelectedIndexChanged += (s, e) => Exibir();
+            barra.Controls.AddRange(new Control[] { btnIncluir, btnComposto, btnAlterar, btnExcluir, lblF, txtFiltro, lblC, cboContab });
 
             dgv = new DataGridView
             {
@@ -142,11 +146,15 @@ namespace Imobilizado.App
                 || (l.Doc ?? "").IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0
                 || (l.Emissor ?? "").IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0
                 || (l.Forn ?? "").IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0;
-            var filtrados = Ordenar(_lancamentos.Where(Casa).ToList());
+            int modoContab = cboContab?.SelectedIndex ?? 0;   // 0=todos, 1=válidos, 2=pendentes
+            bool CasaContab(LancamentoMovfin l) => modoContab == 0
+                || (modoContab == 1 ? ValidoContab(l) : !ValidoContab(l));
+            var filtrados = Ordenar(_lancamentos.Where(l => Casa(l) && CasaContab(l)).ToList());
             var view = filtrados.Select(l => new
             {
                 l.Recno,
                 l.MovId,
+                Cont = ValidoContab(l) ? "✓" : "✗",   // válido para a contabilidade?
                 Data = Fmt(l.Data),
                 l.Debito,
                 l.Credito,
@@ -161,6 +169,7 @@ namespace Imobilizado.App
             dgv.DataSource = view;
             if (dgv.Columns.Contains("Recno")) dgv.Columns["Recno"].Visible = false;
             if (dgv.Columns.Contains("MovId")) dgv.Columns["MovId"].HeaderText = "MOV_ID";
+            if (dgv.Columns.Contains("Cont")) { dgv.Columns["Cont"].HeaderText = "Cont."; dgv.Columns["Cont"].FillWeight = 22; dgv.Columns["Cont"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter; dgv.Columns["Cont"].ToolTipText = "Válido para a contabilidade (✓) ou pendente (✗)"; }
             if (dgv.Columns.Contains("Valor")) { dgv.Columns["Valor"].DefaultCellStyle.Format = "N2"; dgv.Columns["Valor"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight; }
             foreach (DataGridViewColumn c in dgv.Columns)
             {
@@ -169,9 +178,23 @@ namespace Imobilizado.App
             }
             if (dgv.Columns.Contains(_ordCol))
                 dgv.Columns[_ordCol].HeaderCell.SortGlyphDirection = _ordAsc ? SortOrder.Ascending : SortOrder.Descending;
-            lblResumo.Text = (f.Length > 0 ? $"{filtrados.Count} de {_lancamentos.Count} lançamentos" : $"{_lancamentos.Count} lançamentos")
-                + $" | total R$ {filtrados.Sum(l => l.Valor):N2}";
+            // pinta de vermelho-claro as linhas pendentes (inválidas p/ contabilidade)
+            foreach (DataGridViewRow row in dgv.Rows)
+            {
+                var item = row.DataBoundItem;
+                var cont = item?.GetType().GetProperty("Cont")?.GetValue(item) as string;
+                if (cont == "✗") row.DefaultCellStyle.BackColor = Color.FromArgb(255, 233, 233);
+            }
+            int validos = filtrados.Count(ValidoContab);
+            decimal totDeb = filtrados.Where(l => !string.IsNullOrWhiteSpace(l.Debito)).Sum(l => l.Valor);
+            decimal totCred = filtrados.Where(l => !string.IsNullOrWhiteSpace(l.Credito)).Sum(l => l.Valor);
+            lblResumo.Text = (f.Length > 0 || modoContab != 0 ? $"{filtrados.Count} de {_lancamentos.Count} lançamentos" : $"{_lancamentos.Count} lançamentos")
+                + $" | válidos p/ contab.: {validos}, pendentes: {filtrados.Count - validos}"
+                + $" | Débitos R$ {totDeb:N2}   Créditos R$ {totCred:N2}";
         }
+
+        /// <summary>True se o lançamento é válido para a contabilidade (contas resolvem no PLACON / banco→CONTAB analítico).</summary>
+        private bool ValidoContab(LancamentoMovfin l) => _plano != null && _plano.ValidoParaContabilidade(l.Debito, l.Credito);
 
         private void OrdenarPor(string col)
         {

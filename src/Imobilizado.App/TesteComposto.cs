@@ -22,6 +22,37 @@ namespace Imobilizado.App
             catch (Exception ex) { P("EXCEÇÃO: " + ex); }
         }
 
+        /// <summary>Valida a regra "válido para a contabilidade" contra os dados reais de um período.</summary>
+        public static void TestaContab(string pasta, string d1, string d2)
+        {
+            var caminho = System.IO.Path.Combine(pasta, "_teste_contab.txt");
+            var log = new System.Text.StringBuilder();
+            Action<string> P = s => { Console.WriteLine(s); log.AppendLine(s); System.IO.File.WriteAllText(caminho, log.ToString()); };
+            try
+            {
+                var plano = Contabil.Core.PlanoContas.Carregar(System.IO.Path.Combine(pasta, "placon.DBF"));
+                var lanc = new MovfinGravador(pasta).LerPeriodo(d1, d2, null);
+                int validos = lanc.Count(l => plano.ValidoParaContabilidade(l.Debito, l.Credito));
+                P($"=== Validação contábil {d1}..{d2} ===");
+                P($"Total: {lanc.Count} | Válidos: {validos} | Pendentes: {lanc.Count - validos}");
+                P("");
+                P("Exemplos de PENDENTES (lado que não resolve):");
+                foreach (var l in lanc.Where(l => !plano.ValidoParaContabilidade(l.Debito, l.Credito)).Take(12))
+                {
+                    string motivo = "";
+                    if (!string.IsNullOrWhiteSpace(l.Debito) && plano.ResolverContabil(l.Debito) == null) motivo += $"DÉB [{l.Debito}] não resolve; ";
+                    if (!string.IsNullOrWhiteSpace(l.Credito) && plano.ResolverContabil(l.Credito) == null) motivo += $"CRÉD [{l.Credito}] não resolve; ";
+                    if (string.IsNullOrWhiteSpace(l.Debito) && string.IsNullOrWhiteSpace(l.Credito)) motivo = "sem débito nem crédito";
+                    P($"   rec={l.Recno} {l.Data} D=[{l.Debito}] C=[{l.Credito}] V={l.Valor:N2} -> {motivo}");
+                }
+                P("");
+                P("Exemplos de VÁLIDOS:");
+                foreach (var l in lanc.Where(l => plano.ValidoParaContabilidade(l.Debito, l.Credito)).Take(6))
+                    P($"   rec={l.Recno} D=[{l.Debito}]->{plano.ResolverContabil(l.Debito)} C=[{l.Credito}]->{plano.ResolverContabil(l.Credito)}");
+            }
+            catch (Exception ex) { P("EXCEÇÃO: " + ex); }
+        }
+
         /// <summary>Simula a digitação na máscara de centavos do FrmGrupoComposto e imprime o resultado.</summary>
         public static void TestaMascara()
         {

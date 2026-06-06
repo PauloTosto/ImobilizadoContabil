@@ -106,6 +106,43 @@ namespace Contabil.Core
             return null;
         }
 
+        /// <summary>
+        /// Resolve um lado (DEBITO/CREDITO) do MOVFIN para a conta **analítica** do PLACON, com a
+        /// regra de "válido para a contabilidade" (espelha o Fin_Oficial/Contas_Fin do Clipper):
+        ///  - apelido **DESC2 com correspondência PERFEITA** no PLACON, sendo conta **analítica**; ou
+        ///  - **código de banco (2 dígitos)** que casa em BANCOS e cujo CONTAB é uma conta
+        ///    **analítica existente** no PLACON.
+        /// Retorna o NUMCONTA analítico, ou null se o lado não for válido para a contabilidade.
+        /// (O mapa de apelidos já inclui banco-2-díg → CONTAB; aqui só exige que exista no PLACON
+        /// e seja analítica — o que descarta bancos sem CONTAB no plano e contas sintéticas.)
+        /// </summary>
+        public string ResolverContabil(string debitoOuCredito)
+        {
+            var v = (debitoOuCredito ?? "").Trim();
+            if (v.Length == 0) return null;
+            string nc = null;
+            if (_apelidoParaConta.TryGetValue(v, out var alias)) nc = alias;   // DESC2 exato OU banco-2-díg → CONTAB
+            else if (v.Length == 8 && EhDigitos(v)) nc = v;                     // número de conta direto
+            if (nc == null || !_porNumConta.ContainsKey(nc)) return null;      // tem que existir no PLACON
+            return EhAnalitica(nc) ? nc : null;                                // e ser analítica
+        }
+
+        /// <summary>
+        /// True se o lançamento (par débito/crédito) é válido para a contabilidade: cada lado
+        /// PREENCHIDO resolve para uma conta analítica do PLACON (ver <see cref="ResolverContabil"/>).
+        /// Meia-entrada (um lado só, típica do composto) é válida se o lado preenchido resolver.
+        /// Linha sem débito nem crédito não é válida.
+        /// </summary>
+        public bool ValidoParaContabilidade(string debito, string credito)
+        {
+            bool temDeb = !string.IsNullOrWhiteSpace(debito);
+            bool temCred = !string.IsNullOrWhiteSpace(credito);
+            if (!temDeb && !temCred) return false;
+            if (temDeb && ResolverContabil(debito) == null) return false;
+            if (temCred && ResolverContabil(credito) == null) return false;
+            return true;
+        }
+
         /// <summary>Conta analítica = posições 6-8 do número diferentes de "000" (não é sintética/grupo).</summary>
         public static bool EhAnalitica(string numConta)
             => !string.IsNullOrEmpty(numConta) && numConta.Length >= 8 && numConta.Substring(5, 3) != "000";

@@ -40,9 +40,21 @@ namespace Imobilizado.App
                 return;
             }
 
+            if (args.Length > 4 && args[0] == "--capturalanc")
+            {
+                CapturaComposto.RodarLanc(args[1], args[2], args[3], args[4]);
+                return;
+            }
+
             if (args.Length > 0 && args[0] == "--testmask")
             {
                 TesteComposto.TestaMascara();
+                return;
+            }
+
+            if (args.Length > 1 && args[0] == "--testcontab")
+            {
+                TesteComposto.TestaContab(args[1], args.Length > 2 ? args[2] : "20250101", args.Length > 3 ? args[3] : "20251231");
                 return;
             }
 
