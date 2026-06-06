@@ -37,6 +37,16 @@ namespace Contabil.Core
         }
 
         /// <summary>
+        /// Uma conta financeira oficial (banco/caixa) só acumula o movimento quando referenciada
+        /// pelo seu CÓDIGO de banco (2 díg) — NÃO pelo apelido. Isso evita dobrar as transferências
+        /// entre contas financeiras (gravadas em 2 registros espelhados no MOVFIN: um com o código,
+        /// outro com o apelido). Contas não-financeiras sempre contam. Espelha o FLT_BAL:
+        /// "DA PRIORIDADE a CONTA FINANCEIRA PELO NUMERO DELA" (tconta = mnemônico do banco, senão DESC2).
+        /// </summary>
+        private bool ContaPorReferencia(string conta, string ladoRaw)
+            => !_plano.EhContaFinanceira(conta) || _plano.EhCodigoBanco(ladoRaw);
+
+        /// <summary>
         /// Saldo de todas as contas até <paramref name="dataLimite"/> ("YYYYMMDD"), numa
         /// única passada pelo MOVFIN. <paramref name="excluir"/> permite ignorar lançamentos
         /// (ex.: o próprio lote SIST_APROP do período, ou manuais de fechamento).
@@ -63,11 +73,11 @@ namespace Contabil.Core
 
                 // débito na conta: conta se a data > âncora da conta e a contrapartida (crédito) passa em check_conta
                 if (contaD != null && _plano.Contas.TryGetValue(contaD, out var cd)
-                    && MaiorQueAncora(data, cd.DataAncora) && CheckConta(credRaw))
+                    && MaiorQueAncora(data, cd.DataAncora) && CheckConta(credRaw) && ContaPorReferencia(contaD, debRaw))
                     saldo[contaD] += valor;
 
                 if (contaC != null && _plano.Contas.TryGetValue(contaC, out var cc)
-                    && MaiorQueAncora(data, cc.DataAncora) && CheckConta(debRaw))
+                    && MaiorQueAncora(data, cc.DataAncora) && CheckConta(debRaw) && ContaPorReferencia(contaC, credRaw))
                     saldo[contaC] -= valor;
             }
             return saldo;
@@ -111,14 +121,14 @@ namespace Contabil.Core
                 bool antes = string.Compare(data, data1, StringComparison.Ordinal) < 0;
 
                 if (contaD != null && _plano.Contas.TryGetValue(contaD, out var cd)
-                    && MaiorQueAncora(data, cd.DataAncora) && CheckConta(credRaw))
+                    && MaiorQueAncora(data, cd.DataAncora) && CheckConta(credRaw) && ContaPorReferencia(contaD, debRaw))
                 {
                     var a = ap[contaD];
                     if (antes) a.Val1 += valor; else a.Val2 += valor;
                     ap[contaD] = a;
                 }
                 if (contaC != null && _plano.Contas.TryGetValue(contaC, out var cc)
-                    && MaiorQueAncora(data, cc.DataAncora) && CheckConta(debRaw))
+                    && MaiorQueAncora(data, cc.DataAncora) && CheckConta(debRaw) && ContaPorReferencia(contaC, credRaw))
                 {
                     var a = ap[contaC];
                     if (antes) a.Val1 -= valor; else a.Val3 += valor;

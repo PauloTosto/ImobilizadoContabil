@@ -26,8 +26,21 @@ namespace Contabil.Core
         private readonly Dictionary<string, Conta> _porNumConta = new Dictionary<string, Conta>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string> _apelidoParaConta = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _foraDaAncora = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _contasFinanceiras = new HashSet<string>(StringComparer.OrdinalIgnoreCase);  // CONTAB dos bancos oficiais
+        private readonly HashSet<string> _codigosBanco = new HashSet<string>(StringComparer.OrdinalIgnoreCase);        // NBANCO 2-díg dos bancos oficiais
 
         public IReadOnlyDictionary<string, Conta> Contas => _porNumConta;
+
+        /// <summary>
+        /// True se a conta é uma conta financeira OFICIAL (é o CONTAB de um banco da tabela BANCOS).
+        /// No balancete, contas financeiras só contam os movimentos referenciados pelo CÓDIGO do
+        /// banco (2 díg) — não pelo apelido — para não dobrar transferências entre contas financeiras
+        /// (espelha o "DA PRIORIDADE a CONTA FINANCEIRA PELO NUMERO DELA" do FLT_BAL).
+        /// </summary>
+        public bool EhContaFinanceira(string numConta) => numConta != null && _contasFinanceiras.Contains(numConta.Trim());
+
+        /// <summary>True se a string é um código de banco de 2 dígitos (NBANCO) de um banco oficial.</summary>
+        public bool EhCodigoBanco(string raw) => raw != null && _codigosBanco.Contains(raw.Trim());
 
         /// <summary>
         /// Contas que existem no PLACON (master) mas NÃO no arquivo de âncora (PTPLA&lt;ano-1&gt;) —
@@ -100,6 +113,8 @@ namespace Contabil.Core
                     if (nb.Length == 1) nb = "0" + nb;
                     if (nb.Length > 0 && !pc._apelidoParaConta.ContainsKey(nb))
                         pc._apelidoParaConta[nb] = contab;
+                    if (nb.Length > 0) pc._codigosBanco.Add(nb);   // código do banco oficial
+                    pc._contasFinanceiras.Add(contab);             // CONTAB = conta financeira oficial
                 }
             }
             return pc;
