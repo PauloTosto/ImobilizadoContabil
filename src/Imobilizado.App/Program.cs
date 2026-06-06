@@ -24,6 +24,7 @@ namespace Imobilizado.App
                 using (var f7 = new FrmLancamento(null, null)) { var _ = f7.Handle; }
                 using (var f8 = new FrmLancamentoComposto(null, null, null)) { var _ = f8.Handle; }
                 using (var f9 = new FrmGrupoComposto(new System.Collections.Generic.List<Imobilizado.Dados.LancamentoMovfin>(), null)) { var _ = f9.Handle; }
+                using (var f10 = new FrmBalancete()) { var _ = f10.Handle; }
                 Console.WriteLine("SELFTEST OK");
                 return;
             }
@@ -55,6 +56,24 @@ namespace Imobilizado.App
             if (args.Length > 1 && args[0] == "--testcontab")
             {
                 TesteComposto.TestaContab(args[1], args.Length > 2 ? args[2] : "20250101", args.Length > 3 ? args[3] : "20251231");
+                return;
+            }
+
+            if (args.Length > 1 && args[0] == "--testbalancete")
+            {
+                TesteComposto.TestaBalancete(args[1], args.Length > 2 ? args[2] : "20250101", args.Length > 3 ? args[3] : "20251231");
+                return;
+            }
+
+            if (args.Length > 4 && args[0] == "--capturabalancete")
+            {
+                CapturaComposto.RodarBalancete(args[1], args[2], args[3], args[4]);
+                return;
+            }
+
+            if (args.Length > 1 && args[0] == "--testexcel")
+            {
+                TesteComposto.TestaExcelNovas(args[1], args.Length > 2 ? args[2] : "20250101", args.Length > 3 ? args[3] : "20251231");
                 return;
             }
 

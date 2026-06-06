@@ -18,4 +18,10 @@
     <ProjectReference Include="..\Contabil.Core\Contabil.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- EPPlus 4.5.3.3 (LGPL, sem prompt de licença) para exportar o balancete em .xlsx,
+         igual ao Contabil2020. -->
+    <PackageReference Include="EPPlus" Version="4.5.3.3" />
+  </ItemGroup>
+
 </Project>

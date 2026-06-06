@@ -42,7 +42,7 @@ namespace Imobilizado.App
         {
             Text = "Imobilizado / Depreciação — Contabilidade";
             StartPosition = FormStartPosition.CenterScreen;
-            MinimumSize = new Size(900, 560);
+            MinimumSize = new Size(1000, 560);
             Size = new Size(1040, 640);
             MontarUI();
             CarregarConfig();
@@ -71,8 +71,10 @@ namespace Imobilizado.App
             btnPlacon.Click += (s, e) => { using (var f = new FrmPlacon()) f.ShowDialog(this); };
             var btnLanc = new Button { Text = "Lançamentos…", Location = new Point(740, 41), Width = 120 };
             btnLanc.Click += (s, e) => { using (var f = new FrmLancamentos()) f.ShowDialog(this); };
+            var btnBal = new Button { Text = "Balancete…", Location = new Point(866, 41), Width = 110 };
+            btnBal.Click += (s, e) => { using (var f = new FrmBalancete()) f.ShowDialog(this); };
 
-            topo.Controls.AddRange(new Control[] { lblPasta, txtPasta, btnPasta, lblComp, numAno, lblBarra, numMes, btnCarregar, btnAprop, btnPlacon, btnLanc });
+            topo.Controls.AddRange(new Control[] { lblPasta, txtPasta, btnPasta, lblComp, numAno, lblBarra, numMes, btnCarregar, btnAprop, btnPlacon, btnLanc, btnBal });
 
             // ----- abas -----
             tabs = new TabControl { Dock = DockStyle.Fill };

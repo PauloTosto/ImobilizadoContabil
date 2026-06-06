@@ -25,8 +25,16 @@ namespace Contabil.Core
 
         private readonly Dictionary<string, Conta> _porNumConta = new Dictionary<string, Conta>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string> _apelidoParaConta = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _foraDaAncora = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         public IReadOnlyDictionary<string, Conta> Contas => _porNumConta;
+
+        /// <summary>
+        /// Contas que existem no PLACON (master) mas NÃO no arquivo de âncora (PTPLA&lt;ano-1&gt;) —
+        /// ou seja, contas novas acrescentadas ao plano que ainda não estão no snapshot de saldos.
+        /// Entram no balancete com SDO=0; o usuário pode optar por gravá-las no PTPLA.
+        /// </summary>
+        public IReadOnlyCollection<string> ContasForaDaAncora => _foraDaAncora;
 
         /// <summary>Carrega de um único arquivo (estrutura e âncora vêm do mesmo placon).</summary>
         public static PlanoContas Carregar(string caminhoPlacon) => Carregar(caminhoPlacon, caminhoPlacon);
@@ -72,6 +80,7 @@ namespace Contabil.Core
                     DataAncora = temAncora ? a.data : dataAncoraPadrao,
                 };
                 pc._porNumConta[nc] = c;
+                if (!temAncora) pc._foraDaAncora.Add(nc);   // conta nova: está no placon mas não no PTPLA
                 if (!string.IsNullOrEmpty(c.Desc2) && !pc._apelidoParaConta.ContainsKey(c.Desc2))
                     pc._apelidoParaConta[c.Desc2] = nc;
             }

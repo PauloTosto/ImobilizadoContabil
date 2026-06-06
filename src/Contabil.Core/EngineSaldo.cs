@@ -152,6 +152,38 @@ namespace Contabil.Core
             return resultado;
         }
 
+        /// <summary>
+        /// Apuração (Val1/Val2/Val3) de TODAS as contas com ROLLUP nas sintéticas: as analíticas
+        /// têm a sua própria apuração; cada sintética recebe a SOMA das analíticas descendentes
+        /// (saldo anterior, débitos e créditos somados separadamente). É o balancete completo —
+        /// equivale ao Reload() do FrmBalancete do Contabil2020, mas sem depender do SDO sintético
+        /// gravado (rola direto das folhas, como o EngineSaldo já valida 99,7% vs PTPLA).
+        /// </summary>
+        public Dictionary<string, Apuracao> ApurarPeriodoComRollup(string caminhoMovfin, string data1, string data2,
+            Func<string, string, bool> excluir = null)
+        {
+            var direto = ApurarPeriodo(caminhoMovfin, data1, data2, excluir);
+            var res = new Dictionary<string, Apuracao>(StringComparer.OrdinalIgnoreCase);
+            foreach (var nc in _plano.Contas.Keys) res[nc] = new Apuracao();
+
+            foreach (var kv in _plano.Contas)
+            {
+                if (!HierarquiaContas.EhAnalitica(kv.Key)) continue;     // só folhas têm apuração própria
+                if (!direto.TryGetValue(kv.Key, out var a)) continue;
+                Acumula(res, kv.Key, a);
+                foreach (var anc in HierarquiaContas.Ancestrais(kv.Key))
+                    if (res.ContainsKey(anc)) Acumula(res, anc, a);
+            }
+            return res;
+        }
+
+        private static void Acumula(Dictionary<string, Apuracao> d, string conta, Apuracao a)
+        {
+            var x = d[conta];
+            x.Val1 += a.Val1; x.Val2 += a.Val2; x.Val3 += a.Val3;
+            d[conta] = x;
+        }
+
         private static bool MaiorQueAncora(string data, string ancora)
             => string.IsNullOrEmpty(ancora) || string.Compare(data, ancora, StringComparison.Ordinal) > 0;
 

@@ -22,6 +22,87 @@ namespace Imobilizado.App
             catch (Exception ex) { P("EXCEÇÃO: " + ex); }
         }
 
+        /// <summary>Valida export Excel do balancete + detecção/inserção de contas novas no PTPLA (CÓPIA).</summary>
+        public static void TestaExcelNovas(string pasta, string d1, string d2)
+        {
+            var caminho = System.IO.Path.Combine(pasta, "_teste_excel.txt");
+            var log = new System.Text.StringBuilder();
+            Action<string> P = s => { Console.WriteLine(s); log.AppendLine(s); System.IO.File.WriteAllText(caminho, log.ToString()); };
+            try
+            {
+                var f = new FrmBalancete();
+                var _h = f.Handle;
+                var tp = typeof(FrmBalancete);
+                var bf = BindingFlags.NonPublic | BindingFlags.Instance;
+                T Campo<T>(string n) => (T)tp.GetField(n, bf).GetValue(f);
+                Campo<TextBox>("txtPasta").Text = pasta;
+                Campo<DateTimePicker>("dtDe").Value = new DateTime(int.Parse(d1.Substring(0, 4)), int.Parse(d1.Substring(4, 2)), int.Parse(d1.Substring(6, 2)));
+                Campo<DateTimePicker>("dtAte").Value = new DateTime(int.Parse(d2.Substring(0, 4)), int.Parse(d2.Substring(4, 2)), int.Parse(d2.Substring(6, 2)));
+                tp.GetMethod("Calcular", bf).Invoke(f, null);
+
+                var novas = (System.Collections.Generic.List<string>)tp.GetMethod("NovasComMovimento", bf).Invoke(f, null);
+                P($"=== Contas novas (placon, fora do PTPLA{int.Parse(d2.Substring(0, 4)) - 1}) COM movimento: {novas.Count} ===");
+                foreach (var nc in novas.Take(10)) P("   " + nc);
+
+                var linhas = tp.GetMethod("MontarLinhas", bf).Invoke(f, null);
+                var xlsx = System.IO.Path.Combine(pasta, "balancete_teste.xlsx");
+                tp.GetMethod("GravarExcel", bf).Invoke(f, new object[] { xlsx, linhas });
+                var fi = new System.IO.FileInfo(xlsx);
+                P($"\n.xlsx gerado: existe={fi.Exists}, {fi.Length} bytes");
+                using (var pkg = new OfficeOpenXml.ExcelPackage(fi))
+                {
+                    var ws = pkg.Workbook.Worksheets["Balancete"];
+                    P($"   Dimensão: {ws.Dimension?.Address}");
+                    P($"   A1: {ws.Cells[1, 1].Value}");
+                    P($"   Cabeçalhos: {string.Join(" | ", System.Linq.Enumerable.Range(1, 6).Select(c => ws.Cells[3, c].Value))}");
+                    P($"   1ª linha: {string.Join(" | ", System.Linq.Enumerable.Range(1, 6).Select(c => ws.Cells[4, c].Value))}");
+                }
+
+                // testa o INSERT no PTPLA via VFPOLEDB (na CÓPIA) com uma conta fictícia que certamente não existe
+                var pg = new PtplaGravador(pasta, int.Parse(d2.Substring(0, 4)) - 1);
+                var alvo = novas.Count > 0 ? novas[0] : "19999991";
+                bool antes = pg.Existe(alvo);
+                bool ins = pg.InserirConta(alvo, "5", "TESTE CONTA NOVA", "TST # NOVA", d1);
+                bool depois = pg.Existe(alvo);
+                bool ins2 = pg.InserirConta(alvo, "5", "TESTE", "TST # NOVA", d1);   // 2ª vez deve recusar (já existe)
+                P($"\nPtplaGravador.InserirConta({alvo}): existia_antes={antes}, inseriu={ins}, existe_agora={depois}, reinserir={ins2} (esperado false)");
+                f.Dispose();
+            }
+            catch (Exception ex) { P("EXCEÇÃO: " + ex); }
+        }
+
+        /// <summary>Valida o balancete: confere débito=crédito e mostra os grupos de 1º nível.</summary>
+        public static void TestaBalancete(string pasta, string d1, string d2)
+        {
+            var caminho = System.IO.Path.Combine(pasta, "_teste_balancete.txt");
+            var log = new System.Text.StringBuilder();
+            Action<string> P = s => { Console.WriteLine(s); log.AppendLine(s); System.IO.File.WriteAllText(caminho, log.ToString()); };
+            try
+            {
+                int ano = int.Parse(d2.Substring(0, 4));
+                var ptpla = System.IO.Path.Combine(pasta, $"PTPLA{ano - 1}.DBF");
+                var plano = Contabil.Core.PlanoContas.Carregar(System.IO.Path.Combine(pasta, "placon.DBF"), ptpla);
+                var eng = new Contabil.Core.EngineSaldo(plano);
+                var ap = eng.ApurarPeriodoComRollup(System.IO.Path.Combine(pasta, "MOVFIN.DBF"), d1, d2);
+                decimal td = 0, tc = 0;
+                foreach (var kv in ap) if (Contabil.Core.HierarquiaContas.EhAnalitica(kv.Key)) { td += kv.Value.Val2; tc += kv.Value.Val3; }
+                P($"=== Balancete {d1}..{d2} (âncora PTPLA{ano - 1}) ===");
+                P($"Total Débitos:  {td:N2}");
+                P($"Total Créditos: {tc:N2}");
+                P($"Diferença: {td - tc:N2}  -> {(decimal.Round(td - tc, 2) == 0 ? "CONFERE" : "NÃO CONFERE")}");
+                P("");
+                P("Grupos de 1º nível (sintéticos) com saldo:");
+                foreach (var nc in ap.Keys.Where(k => Contabil.Core.HierarquiaContas.Nivel(k) == 1).OrderBy(k => k))
+                {
+                    var a = ap[nc];
+                    if (a.Val1 == 0 && a.Val2 == 0 && a.Val3 == 0 && a.SaldoFinal == 0) continue;
+                    plano.Contas.TryGetValue(nc, out var c);
+                    P($"   {nc} {c?.Descricao,-28} ant={a.Val1,16:N2} déb={a.Val2,14:N2} cré={a.Val3,14:N2} atual={a.SaldoFinal,16:N2}");
+                }
+            }
+            catch (Exception ex) { P("EXCEÇÃO: " + ex); }
+        }
+
         /// <summary>Valida a regra "válido para a contabilidade" contra os dados reais de um período.</summary>
         public static void TestaContab(string pasta, string d1, string d2)
         {
