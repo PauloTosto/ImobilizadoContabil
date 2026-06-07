@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace Imobilizado.App
@@ -25,6 +26,7 @@ namespace Imobilizado.App
                 using (var f8 = new FrmLancamentoComposto(null, null, null)) { var _ = f8.Handle; }
                 using (var f9 = new FrmGrupoComposto(new System.Collections.Generic.List<Imobilizado.Dados.LancamentoMovfin>(), null)) { var _ = f9.Handle; }
                 using (var f10 = new FrmBalancete()) { var _ = f10.Handle; }
+                using (var f11 = new FrmExportaAlterData()) { var _ = f11.Handle; }
                 Console.WriteLine("SELFTEST OK");
                 return;
             }
@@ -80,6 +82,31 @@ namespace Imobilizado.App
             if (args.Length > 1 && args[0] == "--testexcel")
             {
                 TesteComposto.TestaExcelNovas(args[1], args.Length > 2 ? args[2] : "20250101", args.Length > 3 ? args[3] : "20251231");
+                return;
+            }
+
+            if (args.Length > 1 && args[0] == "--dumpfolha")
+            {
+                TesteComposto.DumpFolha(args[1], args.Length > 2 ? args[2] : "20260101", args.Length > 3 ? args[3] : "20260131",
+                    args.Length > 4 ? args[4] : "SIST_RURAL NW");
+                return;
+            }
+
+            if (args.Length > 2 && args[0] == "--checkconta")
+            {
+                TesteComposto.TestaConta(args[1], args.Skip(2).ToArray());
+                return;
+            }
+
+            if (args.Length > 1 && args[0] == "--testalterdata")
+            {
+                TesteComposto.TestaAlterData(args[1], args.Length > 2 ? args[2] : "20260101", args.Length > 3 ? args[3] : "20260131");
+                return;
+            }
+
+            if (args.Length > 4 && args[0] == "--capturaalterdata")
+            {
+                CapturaComposto.RodarExportaAlterData(args[1], args[2], args[3], args[4]);
                 return;
             }
 

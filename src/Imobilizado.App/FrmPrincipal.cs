@@ -127,6 +127,9 @@ namespace Imobilizado.App
             It(mCont, "Plano de Contas…", (s, e) => { using (var f = new FrmPlacon()) f.ShowDialog(this); });
             It(mCont, "Balancete…", (s, e) => { using (var f = new FrmBalancete()) f.ShowDialog(this); });
 
+            var mAlter = M("&AlterData");
+            It(mAlter, "Exportar Lote…", (s, e) => { using (var f = new FrmExportaAlterData()) f.ShowDialog(this); });
+
             // ----- status -----
             status = new StatusStrip();
             statusLabel = new ToolStripStatusLabel("Pronto.");

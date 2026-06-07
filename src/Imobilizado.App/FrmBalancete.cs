@@ -121,6 +121,9 @@ namespace Imobilizado.App
                 Application.DoEvents();
                 _plano = PlanoContas.Carregar(placon, ptpla);   // estrutura+apelidos do placon; saldos do PTPLA<ano-1>
                 var engine = new EngineSaldo(_plano);
+                // Balancete CRU (lê o MOVFIN direto), que é a referência do Paulo: bate ~99% (863/877) com o
+                // balancete "até abril" do Contabil2020. NÃO parear a folha aqui — o pareamento (FrmRazão antigo)
+                // distorce as somas por conta (IRF/salário-família) e PIORA o casamento. Ver PareadorFolha.
                 Func<string, string, bool> excluir = chkFechamento.Checked ? (doc, data) => doc == "SIST_BAL" : (Func<string, string, bool>)null;
                 _apuracao = engine.ApurarPeriodoComRollup(movfin, dtDe.Value.ToString("yyyyMMdd"), dtAte.Value.ToString("yyyyMMdd"), excluir);
                 Exibir();

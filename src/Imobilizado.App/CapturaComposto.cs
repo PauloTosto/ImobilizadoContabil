@@ -96,6 +96,31 @@ namespace Imobilizado.App
             f.Close();
         }
 
+        /// <summary>Captura o FrmExportaAlterData já com o lote preparado, p/ conferência visual.</summary>
+        public static void RodarExportaAlterData(string pasta, string d1, string d2, string png)
+        {
+            var f = new FrmExportaAlterData();
+            var _h = f.Handle;
+            T Campo<T>(string nome) => (T)typeof(FrmExportaAlterData).GetField(nome, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(f);
+            Campo<TextBox>("txtPasta").Text = pasta;
+            Campo<DateTimePicker>("dtDe").Value = new DateTime(int.Parse(d1.Substring(0, 4)), int.Parse(d1.Substring(4, 2)), int.Parse(d1.Substring(6, 2)));
+            Campo<DateTimePicker>("dtAte").Value = new DateTime(int.Parse(d2.Substring(0, 4)), int.Parse(d2.Substring(4, 2)), int.Parse(d2.Substring(6, 2)));
+            typeof(FrmExportaAlterData).GetMethod("Preparar", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).Invoke(f, null);
+            f.StartPosition = FormStartPosition.Manual;
+            f.Location = new Point(0, 0);
+            f.Show();
+            Application.DoEvents();
+            System.Threading.Thread.Sleep(400);
+            Application.DoEvents();
+            using (var bmp = new Bitmap(f.Width, f.Height))
+            {
+                using (var gr = Graphics.FromImage(bmp)) { var hdc = gr.GetHdc(); PrintWindow(f.Handle, hdc, 0); gr.ReleaseHdc(hdc); }
+                bmp.Save(png, System.Drawing.Imaging.ImageFormat.Png);
+            }
+            Console.WriteLine($"Capturado em {png}");
+            f.Close();
+        }
+
         /// <summary>Captura o FrmBalancete já calculado, para conferência visual.</summary>
         public static void RodarBalancete(string pasta, string d1, string d2, string png)
         {

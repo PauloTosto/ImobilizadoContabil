@@ -29,7 +29,51 @@ namespace Contabil.Core
         private readonly HashSet<string> _contasFinanceiras = new HashSet<string>(StringComparer.OrdinalIgnoreCase);  // CONTAB dos bancos oficiais
         private readonly HashSet<string> _codigosBanco = new HashSet<string>(StringComparer.OrdinalIgnoreCase);        // NBANCO 2-díg dos bancos oficiais
 
+        /// <summary>Um banco da tabela BANCOS: número (2 díg), apelido DESC2 e conta contábil CONTAB.</summary>
+        public sealed class Banco
+        {
+            public string NBanco;   // "04"
+            public string Desc2;    // apelido (ex.: "BCO_BRASIL")
+            public string Contab;   // conta analítica do plano (CONTAB)
+        }
+        private readonly Dictionary<string, Banco> _bancoPorNumero = new Dictionary<string, Banco>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Banco> _bancoPorDesc2 = new Dictionary<string, Banco>(StringComparer.OrdinalIgnoreCase);
+
         public IReadOnlyDictionary<string, Conta> Contas => _porNumConta;
+
+        /// <summary>Banco pelo número de 2 dígitos (NBANCO). Null se não existir.</summary>
+        public Banco BancoPorNumero(string nb2)
+        {
+            if (string.IsNullOrWhiteSpace(nb2)) return null;
+            var nb = nb2.Trim();
+            if (nb.Length == 1) nb = "0" + nb;
+            return _bancoPorNumero.TryGetValue(nb, out var b) ? b : null;
+        }
+
+        /// <summary>Banco pelo apelido DESC2. Null se não existir.</summary>
+        public Banco BancoPorDesc2(string desc2)
+        {
+            if (string.IsNullOrWhiteSpace(desc2)) return null;
+            return _bancoPorDesc2.TryGetValue(desc2.Trim(), out var b) ? b : null;
+        }
+
+        /// <summary>DESC2 (apelido) do banco com esse número de 2 dígitos; "" se não houver.</summary>
+        public string NBancoDesc2(string nb2) => BancoPorNumero(nb2)?.Desc2 ?? "";
+
+        /// <summary>True se o número de 2 dígitos é um banco com CONTAB preenchido (banco contábil).</summary>
+        public bool EhBancoContabil(string nb2)
+        {
+            var b = BancoPorNumero(nb2);
+            return b != null && !string.IsNullOrWhiteSpace(b.Contab);
+        }
+
+        /// <summary>True se o apelido DESC2 é de um banco com CONTAB preenchido (banco contábil).</summary>
+        public bool EhBancoContabilDesc2(string desc2)
+        {
+            if (string.IsNullOrWhiteSpace(desc2) || desc2.Trim().Length == 2) return false;
+            var b = BancoPorDesc2(desc2);
+            return b != null && !string.IsNullOrWhiteSpace(b.Contab);
+        }
 
         /// <summary>
         /// True se a conta é uma conta financeira OFICIAL (é o CONTAB de um banco da tabela BANCOS).
@@ -111,10 +155,15 @@ namespace Contabil.Core
                     if (contab.Length == 0) continue;
                     var nb = r["NBANCO"].Trim();
                     if (nb.Length == 1) nb = "0" + nb;
+                    var desc2Banco = r["DESC2"].Trim();
                     if (nb.Length > 0 && !pc._apelidoParaConta.ContainsKey(nb))
                         pc._apelidoParaConta[nb] = contab;
                     if (nb.Length > 0) pc._codigosBanco.Add(nb);   // código do banco oficial
                     pc._contasFinanceiras.Add(contab);             // CONTAB = conta financeira oficial
+
+                    var banco = new Banco { NBanco = nb, Desc2 = desc2Banco, Contab = contab };
+                    if (nb.Length > 0 && !pc._bancoPorNumero.ContainsKey(nb)) pc._bancoPorNumero[nb] = banco;
+                    if (desc2Banco.Length > 0 && !pc._bancoPorDesc2.ContainsKey(desc2Banco)) pc._bancoPorDesc2[desc2Banco] = banco;
                 }
             }
             return pc;
