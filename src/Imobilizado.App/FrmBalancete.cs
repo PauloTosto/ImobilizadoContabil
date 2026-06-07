@@ -285,44 +285,60 @@ namespace Imobilizado.App
             }
         }
 
-        /// <summary>Escreve o balancete num .xlsx via EPPlus (separado p/ poder testar headless).</summary>
+        /// <summary>Escreve o balancete num .xlsx no MESMO formato do Contabil2020 (EPPlus).</summary>
         private void GravarExcel(string caminho, List<LinhaBal> linhas)
         {
             var fi = new FileInfo(caminho);
             if (fi.Exists) fi.Delete();
             using (var pkg = new ExcelPackage(fi))
             {
-                var ws = pkg.Workbook.Worksheets.Add("Balancete");
-                ws.Cells[1, 1].Value = $"Balancete — {dtDe.Value:dd/MM/yyyy} a {dtAte.Value:dd/MM/yyyy} (saldos iniciais PTPLA{AnoAnterior()})";
-                ws.Cells[1, 1].Style.Font.Bold = true;
-                string[] hd = { "Conta", "Descrição", "Saldo Anterior", "Débito", "Crédito", "Saldo Atual" };
-                for (int i = 0; i < hd.Length; i++) { ws.Cells[3, i + 1].Value = hd[i]; ws.Cells[3, i + 1].Style.Font.Bold = true; }
+                var ws = pkg.Workbook.Worksheets.Add("Planilha1");
+                // título na linha 1 (coluna A) e cabeçalhos na linha 4 (colunas B..F), igual ao Contabil2020
+                ws.Cells[1, 1].Value = $"Balancete Periodo de {dtDe.Value:dd/MM/yyyy} a {dtAte.Value:dd/MM/yyyy}";
+                ws.Cells[4, 2].Value = "Descrição";
+                ws.Cells[4, 3].Value = "Saldo Anterior";
+                ws.Cells[4, 4].Value = "Debito";
+                ws.Cells[4, 5].Value = "Credito";
+                ws.Cells[4, 6].Value = "Sdo Atual";
+                for (int c = 3; c <= 6; c++) ws.Cells[4, c].Style.HorizontalAlignment = OfficeOpenXml.Style.ExcelHorizontalAlignment.Right;
 
-                int row = 4;
+                int row = 5;
                 foreach (var l in linhas)
                 {
-                    ws.Cells[row, 1].Value = l.Conta;
-                    ws.Cells[row, 2].Value = l.Descricao;
+                    _plano.Contas.TryGetValue(l.Conta, out var c);
+                    ws.Cells[row, 2].Value = NumeroPontilhado(l.Conta) + "  " + (c?.Descricao ?? "").Trim();
                     Num(ws, row, 3, l.SaldoAnterior); Num(ws, row, 4, l.Debito); Num(ws, row, 5, l.Credito); Num(ws, row, 6, l.SaldoAtual);
-                    if (l.Nivel < 5) for (int c = 1; c <= 6; c++) ws.Cells[row, c].Style.Font.Bold = true;
                     row++;
                 }
-                decimal td = 0, tc = 0;
-                foreach (var kv in _apuracao) if (HierarquiaContas.EhAnalitica(kv.Key)) { td += kv.Value.Val2; tc += kv.Value.Val3; }
-                ws.Cells[row + 1, 2].Value = "TOTAIS"; ws.Cells[row + 1, 2].Style.Font.Bold = true;
-                Num(ws, row + 1, 4, decimal.Round(td, 2)); Num(ws, row + 1, 5, decimal.Round(tc, 2));
-                ws.Cells[row + 1, 4].Style.Font.Bold = ws.Cells[row + 1, 5].Style.Font.Bold = true;
 
-                ws.Column(1).Width = 12; ws.Column(2).Width = 46; ws.Column(3).Width = 16;
-                ws.Column(4).Width = 15; ws.Column(5).Width = 15; ws.Column(6).Width = 16;
+                // bordas finas em toda a grade (cabeçalho + dados), colunas B..F
+                int ultima = row - 1;
+                var grade = ws.Cells[4, 2, ultima, 6];
+                grade.Style.Border.Top.Style = OfficeOpenXml.Style.ExcelBorderStyle.Thin;
+                grade.Style.Border.Bottom.Style = OfficeOpenXml.Style.ExcelBorderStyle.Thin;
+                grade.Style.Border.Left.Style = OfficeOpenXml.Style.ExcelBorderStyle.Thin;
+                grade.Style.Border.Right.Style = OfficeOpenXml.Style.ExcelBorderStyle.Thin;
+
+                ws.Column(2).Width = 55; ws.Column(3).Width = 14; ws.Column(4).Width = 14;
+                ws.Column(5).Width = 14; ws.Column(6).Width = 14;
                 pkg.Save();
             }
+        }
+
+        /// <summary>Número de conta no formato pontilhado da máscara 1.1.1.2.3 (ex.: 11101001 → "1.1.1.01.001").</summary>
+        private static string NumeroPontilhado(string nc)
+        {
+            nc = (nc ?? "").Trim();
+            if (nc.Length != 8) return nc;
+            var grupos = new[] { nc.Substring(0, 1), nc.Substring(1, 1), nc.Substring(2, 1), nc.Substring(3, 2), nc.Substring(5, 3) };
+            int nivel = Math.Max(1, HierarquiaContas.Nivel(nc));
+            return string.Join(".", grupos.Take(nivel));
         }
 
         private static void Num(ExcelWorksheet ws, int r, int c, decimal v)
         {
             ws.Cells[r, c].Value = v;
-            ws.Cells[r, c].Style.Numberformat.Format = "#,##0.00";
+            ws.Cells[r, c].Style.Numberformat.Format = "###,###,##0.00";
             ws.Cells[r, c].Style.HorizontalAlignment = OfficeOpenXml.Style.ExcelHorizontalAlignment.Right;
         }
 

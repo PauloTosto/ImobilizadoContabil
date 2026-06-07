@@ -47,6 +47,25 @@ namespace Imobilizado.App
             f.Close();
         }
 
+        /// <summary>Captura o FrmPrincipal (menu) para conferência visual.</summary>
+        public static void RodarPrincipal(string png)
+        {
+            var f = new FrmPrincipal();
+            var _h = f.Handle;
+            f.StartPosition = FormStartPosition.Manual;
+            f.Location = new Point(0, 0);
+            f.Show();
+            Application.DoEvents();
+            System.Threading.Thread.Sleep(300);
+            Application.DoEvents();
+            using (var bmp = new Bitmap(f.Width, f.Height))
+            {
+                using (var gr = Graphics.FromImage(bmp)) { var hdc = gr.GetHdc(); PrintWindow(f.Handle, hdc, 0); gr.ReleaseHdc(hdc); }
+                bmp.Save(png, System.Drawing.Imaging.ImageFormat.Png);
+            }
+            f.Close();
+        }
+
         /// <summary>Captura a tela FrmLancamentos carregada com um período, para conferir o filtro de contabilidade.</summary>
         public static void RodarLanc(string pasta, string d1, string d2, string png)
         {

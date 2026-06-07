@@ -71,6 +71,12 @@ namespace Imobilizado.App
                 return;
             }
 
+            if (args.Length > 1 && args[0] == "--capturaprincipal")
+            {
+                CapturaComposto.RodarPrincipal(args[1]);
+                return;
+            }
+
             if (args.Length > 1 && args[0] == "--testexcel")
             {
                 TesteComposto.TestaExcelNovas(args[1], args.Length > 2 ? args[2] : "20250101", args.Length > 3 ? args[3] : "20251231");

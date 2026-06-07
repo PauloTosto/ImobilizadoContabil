@@ -28,6 +28,7 @@ namespace Imobilizado.App
         private Button btnGravar;
         private StatusStrip status;
         private ToolStripStatusLabel statusLabel;
+        private MenuStrip menu;
 
         private Button btnIncluir, btnAlterar;
 
@@ -65,16 +66,7 @@ namespace Imobilizado.App
             btnCarregar = new Button { Text = "Carregar / Atualizar", Location = new Point(310, 41), Width = 150 };
             btnCarregar.Click += (s, e) => CarregarTudo();
 
-            var btnAprop = new Button { Text = "Apropriações…", Location = new Point(470, 41), Width = 120 };
-            btnAprop.Click += (s, e) => { using (var f = new FrmApropriacao()) f.ShowDialog(this); };
-            var btnPlacon = new Button { Text = "Plano de contas…", Location = new Point(600, 41), Width = 130 };
-            btnPlacon.Click += (s, e) => { using (var f = new FrmPlacon()) f.ShowDialog(this); };
-            var btnLanc = new Button { Text = "Lançamentos…", Location = new Point(740, 41), Width = 120 };
-            btnLanc.Click += (s, e) => { using (var f = new FrmLancamentos()) f.ShowDialog(this); };
-            var btnBal = new Button { Text = "Balancete…", Location = new Point(866, 41), Width = 110 };
-            btnBal.Click += (s, e) => { using (var f = new FrmBalancete()) f.ShowDialog(this); };
-
-            topo.Controls.AddRange(new Control[] { lblPasta, txtPasta, btnPasta, lblComp, numAno, lblBarra, numMes, btnCarregar, btnAprop, btnPlacon, btnLanc, btnBal });
+            topo.Controls.AddRange(new Control[] { lblPasta, txtPasta, btnPasta, lblComp, numAno, lblBarra, numMes, btnCarregar });
 
             // ----- abas -----
             tabs = new TabControl { Dock = DockStyle.Fill };
@@ -107,14 +99,44 @@ namespace Imobilizado.App
             tabs.TabPages.Add(tabBens);
             tabs.TabPages.Add(tabDep);
 
+            // ----- menu principal -----
+            menu = new MenuStrip();
+            ToolStripMenuItem M(string txt) { var m = new ToolStripMenuItem(txt); menu.Items.Add(m); return m; }
+            void It(ToolStripMenuItem pai, string txt, EventHandler ev, Keys atalho = Keys.None)
+            {
+                var it = new ToolStripMenuItem(txt) { ShortcutKeys = atalho };
+                it.Click += ev; pai.DropDownItems.Add(it);
+            }
+
+            var mArq = M("&Arquivo");
+            It(mArq, "Escolher pasta de dados…", (s, e) => EscolherPasta());
+            It(mArq, "Recarregar", (s, e) => CarregarTudo(), Keys.F5);
+            mArq.DropDownItems.Add(new ToolStripSeparator());
+            It(mArq, "Sair", (s, e) => Close());
+
+            var mImob = M("&Imobilizado");
+            It(mImob, "Bens", (s, e) => tabs.SelectedIndex = 0);
+            It(mImob, "Depreciação do mês", (s, e) => tabs.SelectedIndex = 1);
+            mImob.DropDownItems.Add(new ToolStripSeparator());
+            It(mImob, "Incluir bem…", (s, e) => IncluirBem());
+            It(mImob, "Alterar / Baixar bem…", (s, e) => AlterarBem());
+
+            var mCont = M("&Contabilidade");
+            It(mCont, "Lançamentos…", (s, e) => { using (var f = new FrmLancamentos()) f.ShowDialog(this); });
+            It(mCont, "Apropriações…", (s, e) => { using (var f = new FrmApropriacao()) f.ShowDialog(this); });
+            It(mCont, "Plano de Contas…", (s, e) => { using (var f = new FrmPlacon()) f.ShowDialog(this); });
+            It(mCont, "Balancete…", (s, e) => { using (var f = new FrmBalancete()) f.ShowDialog(this); });
+
             // ----- status -----
             status = new StatusStrip();
             statusLabel = new ToolStripStatusLabel("Pronto.");
             status.Items.Add(statusLabel);
 
             Controls.Add(tabs);
-            Controls.Add(topo);
             Controls.Add(status);
+            Controls.Add(topo);
+            Controls.Add(menu);   // adicionado por último -> dock no topo, acima do painel
+            MainMenuStrip = menu;
         }
 
         private static DataGridView NovaGrade() => new DataGridView
