@@ -221,11 +221,14 @@ namespace Imobilizado.App
                 { Aviso($"Valor inválido na linha (D={deb} C={cred})."); return; }
 
                 var o = r.Tag as LancamentoMovfin;   // original (null = linha nova)
+                // GARANTE o vínculo OUTRO_ID ao gravar (o servidor às vezes manda detalhe sem o link):
+                // a linha PRINCIPAL fica OUTRO_ID=0; QUALQUER outra linha aponta para o MOV_ID do mestre.
+                bool ehMestre = o != null && o.OutroId == 0 && o.MovId == _mestreMovId;
                 result.Add(new LancamentoMovfin
                 {
                     Recno = o?.Recno ?? 0,
                     MovId = o?.MovId ?? 0,
-                    OutroId = o != null ? o.OutroId : _mestreMovId,   // linha nova entra como detalhe do mestre
+                    OutroId = ehMestre ? 0m : _mestreMovId,   // detalhe (existente OU novo) sempre ligado ao mestre
                     Data = data, Debito = deb, Credito = cred, Valor = v, Historico = hist,
                     Tipo = tipo, TpFin = tpFin, DocFisc = docFisc,
                     Doc = o?.Doc ?? "", Forn = o?.Forn ?? "", Venc = o?.Venc ?? "",

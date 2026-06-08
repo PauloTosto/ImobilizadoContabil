@@ -75,8 +75,9 @@ namespace Imobilizado.App
             topo.Controls.AddRange(new Control[] { rbDebito, rbCredito, txtDocFisc }); y += 28;
 
             L("Documento:", y); txtDoc = new TextBox { Location = new Point(cx, y), Width = 120, MaxLength = 13 };
-            var lf = Add(topo, new Label { Text = "Fornecedor:", Location = new Point(260, y + 3), AutoSize = true });
-            txtForn = new TextBox { Location = new Point(345, y), Width = 200, MaxLength = 35 };
+            // "Emissor Descrição" (não "Fornecedor"): serve tanto p/ fornecedor (pagamento) quanto cliente (recebimento)
+            var lf = Add(topo, new Label { Text = "Emissor Descrição:", Location = new Point(260, y + 3), AutoSize = true });
+            txtForn = new TextBox { Location = new Point(385, y), Width = 160, MaxLength = 35 };
             topo.Controls.AddRange(new Control[] { txtDoc, txtForn });
 
             dgvLinhas = new DataGridView
