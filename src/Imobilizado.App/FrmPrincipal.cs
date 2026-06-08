@@ -129,6 +129,7 @@ namespace Imobilizado.App
 
             var mAlter = M("&AlterData");
             It(mAlter, "Exportar Lote…", (s, e) => { using (var f = new FrmExportaAlterData()) f.ShowDialog(this); });
+            It(mAlter, "Importar RELACIONA (planilha PESQUISA)…", (s, e) => { using (var f = new FrmImportaRelaciona()) f.ShowDialog(this); });
 
             // ----- status -----
             status = new StatusStrip();

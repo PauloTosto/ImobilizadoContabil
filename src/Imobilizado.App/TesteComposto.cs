@@ -22,6 +22,47 @@ namespace Imobilizado.App
             catch (Exception ex) { P("EXCEÇÃO: " + ex); }
         }
 
+        /// <summary>Testa a importação PESQUISA → RELACIONA.DBF numa pasta de DESTINO (cópia) e compara com uma pasta de REFERÊNCIA.</summary>
+        public static void TestaImporta(string pastaDestino, string xlsx, string pastaRef)
+        {
+            var caminho = System.IO.Path.Combine(pastaDestino, "_teste_importa.txt");
+            var log = new System.Text.StringBuilder();
+            Action<string> P = s => { Console.WriteLine(s); log.AppendLine(s); System.IO.File.WriteAllText(caminho, log.ToString()); };
+            try
+            {
+                P($"Lendo PESQUISA de: {xlsx}");
+                var itens = PesquisaReader.Ler(xlsx);
+                P($"  {itens.Count} linhas lidas | com NOVOCOD: {itens.Count(i => !string.IsNullOrWhiteSpace(i.NovoCod))}");
+
+                var grav = new RelacionaGravador(pastaDestino);
+                var dup = grav.NumcontasDuplicados(itens);
+                P($"  NUMCONTA duplicados: {dup.Count}" + (dup.Count > 0 ? " -> " + string.Join(",", dup.Take(8)) : ""));
+
+                var res = grav.Recriar(itens);
+                P($"GRAVADO em {pastaDestino}: {res.Gravados} registros (pulados sem NOVOCOD: {res.PuladosSemNovocod}) | backup: {res.CaminhoBackup ?? "(não havia)"}");
+
+                var mapNovo = new RelacionaReader(pastaDestino).Carregar(out var dupN);
+                P($"Lido de volta: {mapNovo.Count} NUMCONTA únicos (duplicatas no DBF: {dupN?.Count ?? 0})");
+
+                if (!string.IsNullOrWhiteSpace(pastaRef) && System.IO.File.Exists(System.IO.Path.Combine(pastaRef, "RELACIONA.DBF")))
+                {
+                    var mapRef = new RelacionaReader(pastaRef).Carregar(out _);
+                    int iguais = 0, difRed = 0, difCod = 0;
+                    foreach (var kv in mapNovo)
+                        if (mapRef.TryGetValue(kv.Key, out var rf))
+                        {
+                            bool okR = rf.Reduzido == kv.Value.Reduzido;
+                            bool okC = (rf.NovoCod ?? "").Trim() == (kv.Value.NovoCod ?? "").Trim();
+                            if (okR && okC) iguais++; else { if (!okR) difRed++; if (!okC) difCod++; }
+                        }
+                    P($"=== COMPARAÇÃO com {pastaRef} ===");
+                    P($"  ref: {mapRef.Count} | meu: {mapNovo.Count} | só meu: {mapNovo.Keys.Except(mapRef.Keys).Count()} | só ref: {mapRef.Keys.Except(mapNovo.Keys).Count()}");
+                    P($"  iguais (REDUZIDO+NOVOCOD): {iguais} | difere REDUZIDO: {difRed} | difere NOVOCOD: {difCod}");
+                }
+            }
+            catch (Exception ex) { P("EXCEÇÃO: " + ex.Message); }
+        }
+
         /// <summary>Dumpa os registros (MOVFIN pareado) cujo débito OU crédito RESOLVE para a conta dada — p/ comparar com o PTMOVFIN.</summary>
         public static void DumpConta(string pasta, string conta, string d1, string d2)
         {
