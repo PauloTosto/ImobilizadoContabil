@@ -92,6 +92,12 @@ namespace Imobilizado.App
                 return;
             }
 
+            if (args.Length > 2 && args[0] == "--dumpconta")
+            {
+                TesteComposto.DumpConta(args[1], args[2], args.Length > 3 ? args[3] : "20260101", args.Length > 4 ? args[4] : "20260430");
+                return;
+            }
+
             if (args.Length > 2 && args[0] == "--checkconta")
             {
                 TesteComposto.TestaConta(args[1], args.Skip(2).ToArray());

@@ -22,6 +22,35 @@ namespace Imobilizado.App
             catch (Exception ex) { P("EXCEÇÃO: " + ex); }
         }
 
+        /// <summary>Dumpa os registros (MOVFIN pareado) cujo débito OU crédito RESOLVE para a conta dada — p/ comparar com o PTMOVFIN.</summary>
+        public static void DumpConta(string pasta, string conta, string d1, string d2)
+        {
+            var caminho = System.IO.Path.Combine(pasta, "_dump_conta.txt");
+            var log = new System.Text.StringBuilder();
+            Action<string> P = s => { Console.WriteLine(s); log.AppendLine(s); System.IO.File.WriteAllText(caminho, log.ToString()); };
+            try
+            {
+                var plano = Contabil.Core.PlanoContas.Carregar(System.IO.Path.Combine(pasta, "placon.DBF"));
+                var relMap = new RelacionaReader(pasta).Carregar(out _);
+                var lanc = new MovfinGravador(pasta).LerPeriodo(d1, d2, null);
+                var exp = new ExportadorAlterData(plano, relMap);
+                var pareado = exp.ParearFolha(exp.ParearTransferencias(exp.ParearCompostos(lanc)));
+                var alvo = conta.Trim();
+                decimal somaD = 0, somaC = 0; int n = 0;
+                foreach (var l in pareado.OrderBy(x => x.Data).ThenBy(x => x.Recno))
+                {
+                    var cd = plano.Resolver(l.Debito); var cc = plano.Resolver(l.Credito);
+                    if (cd != alvo && cc != alvo) continue;
+                    n++;
+                    if (cd == alvo) somaD += l.Valor;
+                    if (cc == alvo) somaC += l.Valor;
+                    if (n <= 40) P($"   {l.Data} rec={l.Recno} D=[{l.Debito}]→{cd} C=[{l.Credito}]→{cc} V={l.Valor,12:N2}  H='{(l.Historico ?? "").Trim()}' doc='{(l.Doc ?? "").Trim()}'");
+                }
+                P($"=== conta {alvo}: {n} registros | ΣdébitoNaConta={somaD:N2} ΣcréditoNaConta={somaC:N2} ===");
+            }
+            catch (Exception ex) { P("EXCEÇÃO: " + ex); }
+        }
+
         /// <summary>Lista as linhas de folha (DOC=SIST_RURAL NW) de um período, p/ entender a estrutura antes de parear.</summary>
         public static void DumpFolha(string pasta, string d1, string d2, string doc = "SIST_RURAL NW")
         {

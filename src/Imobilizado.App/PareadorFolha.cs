@@ -24,6 +24,14 @@ namespace Imobilizado.App
     /// </summary>
     public sealed class PareadorFolha
     {
+        /// <summary>
+        /// Data de corte (exclusiva) do pareamento da folha: ANTES dela a folha é solta (meias-entradas)
+        /// e precisa ser pareada aqui (emulando o FrmRazão antigo); A PARTIR dela (01/mai/2026) a folha
+        /// JÁ NASCE PAREADA na origem pela SP nova (CLT_GERA_Trabalhador_MOVFIN_PAREADA, com a lógica
+        /// CORRIGIDA do salário-família) — então NÃO pode ser re-pareada aqui.
+        /// </summary>
+        public const string DataCorteFolha = "20260501";
+
         private readonly PlanoContas _plano;
 
         public PareadorFolha(PlanoContas plano)
@@ -72,6 +80,7 @@ namespace Imobilizado.App
                 // dia incompleto → não pareia (deixa as meias-entradas como estão)
                 if (regSalFam == null || regProvINSS == null || rowProvFolha == null || lancFazendas.Count == 0) continue;
 
+                // base do rateio = Σ bruto − IRF (o IRF sai da base; vai pro maior centro à parte)
                 decimal somalanc = lancFazendas.Sum(r => r.Valor);
                 if (valIR > 0) somalanc -= valIR;
                 if (somalanc == 0) continue;
@@ -83,7 +92,8 @@ namespace Imobilizado.App
                 {
                     if (faz.Valor == 0m) { removidos.Add(faz); continue; }
                     decimal vIRF = (maxFaz != null && ReferenceEquals(maxFaz, faz)) ? valIR : 0m;
-                    decimal valLanc = Math.Round((faz.Valor - vIRF) / somalanc * valoraRatear, 2);
+                    // INSS rateia sobre o BRUTO (o IRF só sai do líquido do maior centro, na retificação)
+                    decimal valLanc = Math.Round(faz.Valor / somalanc * valoraRatear, 2);
                     if (valLanc <= 0m) continue;
                     fazToInss[faz] = new LancamentoMovfin
                     {
@@ -111,8 +121,9 @@ namespace Imobilizado.App
 
                 if (regIrFonte != null && maxFaz != null)
                 {
-                    maxFaz.Valor = maxFaz.Valor - valIR;     // fiel ao original (subtrai o IRF do maior centro)
-                    regIrFonte.Debito = maxFaz.Debito;       // IRF passa a D=maior centro / C=CTA_PG#IRF
+                    // o IRF NÃO é subtraído de novo do centro (a retificação acima já tirou o IRF do
+                    // líquido do maior centro, uma única vez). O IRF vira só mais um débito ao centro:
+                    regIrFonte.Debito = maxFaz.Debito;       // IRF: D=maior centro / C=CTA_PG#IRF
                     regIrFonte.Valor = valIR;
                 }
                 regSalFam.Credito = regProvINSS.Credito;     // salário-família: D=IMP#INSS / C=IMP#INSS (auto-anula)

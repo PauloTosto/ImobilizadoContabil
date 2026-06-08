@@ -121,15 +121,30 @@ namespace Imobilizado.App
                 Application.DoEvents();
                 _plano = PlanoContas.Carregar(placon, ptpla);   // estrutura+apelidos do placon; saldos do PTPLA<ano-1>
                 var engine = new EngineSaldo(_plano);
-                // Balancete CRU (lê o MOVFIN direto), que é a referência do Paulo: bate ~99% (863/877) com o
-                // balancete "até abril" do Contabil2020. NÃO parear a folha aqui — o pareamento (FrmRazão antigo)
-                // distorce as somas por conta (IRF/salário-família) e PIORA o casamento. Ver PareadorFolha.
-                Func<string, string, bool> excluir = chkFechamento.Checked ? (doc, data) => doc == "SIST_BAL" : (Func<string, string, bool>)null;
-                _apuracao = engine.ApurarPeriodoComRollup(movfin, dtDe.Value.ToString("yyyyMMdd"), dtAte.Value.ToString("yyyyMMdd"), excluir);
+                var d1 = dtDe.Value.ToString("yyyyMMdd");
+                var d2 = dtAte.Value.ToString("yyyyMMdd");
+
+                // Lê o MOVFIN e PAREIA a folha SIST_RURAL pré-corte (emula o FrmRazão do Contabil2020 que
+                // gera o PTMOVFIN<ano>): substitui os registros soltos pelos pareados. Validado: reproduz o
+                // PTMOVFIN ao centavo na folha (a folha do PTMOVFIN2026 bate 100%). De maio/2026 em diante a
+                // folha já nasce pareada na origem (sem registros soltos → o pareamento é no-op).
+                string corte = PareadorFolha.DataCorteFolha;                 // 20260501 — pós-corte a folha já vem pareada da origem
+                var ultimoPre = "20260430";                                  // último dia pré-corte (inclusivo)
+                var corteLeitura = string.Compare(d2, ultimoPre, StringComparison.Ordinal) <= 0 ? d2 : ultimoPre;
+                var folhaRaw = new MovfinGravador(pasta).LerPeriodo("19000101", corteLeitura, null)
+                    .Where(l => (l.Doc ?? "").Trim() == "SIST_RURAL NW").ToList();
+                var extra = new PareadorFolha(_plano).Parear(folhaRaw, corte).Select(l => new EngineSaldo.Mov
+                { Data = l.Data, Debito = l.Debito, Credito = l.Credito, Valor = l.Valor, Doc = l.Doc });
+                bool exclFech = chkFechamento.Checked;
+                Func<string, string, bool> excluir = (doc, data) =>
+                    (exclFech && doc == "SIST_BAL")
+                    || (doc == "SIST_RURAL NW" && string.Compare(data, corte, StringComparison.Ordinal) < 0);
+
+                _apuracao = engine.ApurarPeriodoComRollup(movfin, d1, d2, excluir, extra);
                 Exibir();
                 btnExcel.Enabled = btnNovas.Enabled = true;
                 int novasMov = NovasComMovimento().Count;
-                statusLabel.Text = $"Balancete de {dtDe.Value:dd/MM/yyyy} a {dtAte.Value:dd/MM/yyyy} (saldos iniciais de PTPLA{AnoAnterior()})."
+                statusLabel.Text = $"Balancete de {dtDe.Value:dd/MM/yyyy} a {dtAte.Value:dd/MM/yyyy} · saldos iniciais PTPLA{AnoAnterior()} · folha pré-corte pareada."
                     + (novasMov > 0 ? $"  ⚠ {novasMov} conta(s) nova(s) com movimento fora do PTPLA — use \"Contas novas no PTPLA…\"." : "");
             }
             catch (Exception ex) { Aviso("Erro ao calcular:\n" + ex.Message); }

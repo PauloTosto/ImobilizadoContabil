@@ -151,11 +151,12 @@ namespace Imobilizado.App
 
         /// <summary>
         /// Pareia a FOLHA solta do SIST_RURAL (porte do FOLHA_TentaAdvinhar). Delega ao
-        /// <see cref="PareadorFolha"/> (reutilizado pelo balancete). Sem corte de data: pareia
-        /// todos os dias (pós-maio não tem folha solta, então é no-op).
+        /// <see cref="PareadorFolha"/> (reutilizado pelo balancete). SÓ pareia o PRÉ-CORTE
+        /// (&lt; <see cref="PareadorFolha.DataCorteFolha"/>): de 01/mai/2026 em diante a folha já
+        /// nasce pareada na origem (SP nova) e NÃO pode ser re-pareada com a lógica antiga.
         /// </summary>
         public List<LancamentoMovfin> ParearFolha(List<LancamentoMovfin> orig)
-            => new PareadorFolha(_plano).Parear(orig);
+            => new PareadorFolha(_plano).Parear(orig, PareadorFolha.DataCorteFolha);
 
         /// <summary>
         /// Pareia as TRANSFERÊNCIAS entre contas financeiras — porte do JuntaRegistrosTransfBancos

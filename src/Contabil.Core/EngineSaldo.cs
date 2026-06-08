@@ -144,8 +144,19 @@ namespace Contabil.Core
         /// <summary>Acumula um movimento (débito/crédito crus) na apuração, com check_conta + âncora + referência financeira.</summary>
         private void Acumula(Dictionary<string, Apuracao> ap, string debRaw, string credRaw, decimal valor, string data, string data1)
         {
+            // FILTRO "PREPARADO P/ CONTABILIDADE" (mesmo do FrmRazão ao montar o PTMOVFIN): descarta o
+            // registro INTEIRO se algum lado preenchido não casa com um DESC2 analítico (ex.: lançamento
+            // de depreciação gravado com o número cru 32170009, cujo DESC2 é 'ADM # FGTS' — não está apto).
+            if (!_plano.ValidoParaContabilidade(debRaw, credRaw)) return;
+
             var contaD = _plano.Resolver(debRaw);
             var contaC = _plano.Resolver(credRaw);
+
+            // EXCLUI débito == crédito (mesma conta dos dois lados) — o balancete do Contabil2020 ignora
+            // esses registros auto-anulados (ex.: salário-família D=IAPAS/C=IAPAS). Saldo não muda (líquido
+            // zero), mas as colunas Débito/Crédito do período ficariam infladas se contássemos.
+            if (contaD != null && contaD == contaC) return;
+
             bool antes = string.Compare(data, data1, StringComparison.Ordinal) < 0;
 
             if (contaD != null && _plano.Contas.TryGetValue(contaD, out var cd)

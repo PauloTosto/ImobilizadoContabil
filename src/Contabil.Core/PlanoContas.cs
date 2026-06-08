@@ -193,10 +193,12 @@ namespace Contabil.Core
         {
             var v = (debitoOuCredito ?? "").Trim();
             if (v.Length == 0) return null;
-            string nc = null;
-            if (_apelidoParaConta.TryGetValue(v, out var alias)) nc = alias;   // DESC2 exato OU banco-2-díg → CONTAB
-            else if (v.Length == 8 && EhDigitos(v)) nc = v;                     // número de conta direto
-            if (nc == null || !_porNumConta.ContainsKey(nc)) return null;      // tem que existir no PLACON
+            // Critério "preparado para a contabilidade" = casar com um DESC2 (apelido) EXATO, ou ser
+            // código de banco. NÃO vale número de conta cru: se a conta tem DESC2 diferente da numconta
+            // (ex.: 32170009 cujo DESC2 é 'ADM # FGTS'), um lançamento gravado com o número cru
+            // "32170009" NÃO está apto — o Contabil2020 descarta (não entra no PTMOVFIN). Sem fallback.
+            if (!_apelidoParaConta.TryGetValue(v, out var nc)) return null;    // só DESC2 / banco-2-díg → CONTAB
+            if (!_porNumConta.ContainsKey(nc)) return null;                    // tem que existir no PLACON
             return EhAnalitica(nc) ? nc : null;                                // e ser analítica
         }
 
