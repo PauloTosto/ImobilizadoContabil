@@ -47,6 +47,31 @@ namespace Imobilizado.App
             f.Close();
         }
 
+        /// <summary>Captura o FrmLancamentoComposto (incluir) com principal + 1 contrapartida, p/ ver a diferença.</summary>
+        public static void RodarLancComposto(string png)
+        {
+            var f = new FrmLancamentoComposto(null, null, null);
+            var _h = f.Handle;
+            T Campo<T>(string nome) => (T)typeof(FrmLancamentoComposto).GetField(nome, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(f);
+            Campo<TextBox>("txtPrincipal").Text = "CTA_PG # FORNECEDOR";
+            Campo<TextBox>("txtPrincipalValor").Text = "1.000,00";
+            var dg = Campo<DataGridView>("dgvLinhas");
+            dg.Rows.Add("INSUMO # ADUBO", "600,00", "Compra adubo NF 123");
+            typeof(FrmLancamentoComposto).GetMethod("AtualizaTotal", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).Invoke(f, null);
+            f.StartPosition = FormStartPosition.Manual;
+            f.Location = new Point(0, 0);
+            f.Show();
+            Application.DoEvents();
+            System.Threading.Thread.Sleep(300);
+            Application.DoEvents();
+            using (var bmp = new Bitmap(f.Width, f.Height))
+            {
+                using (var gr = Graphics.FromImage(bmp)) { var hdc = gr.GetHdc(); PrintWindow(f.Handle, hdc, 0); gr.ReleaseHdc(hdc); }
+                bmp.Save(png, System.Drawing.Imaging.ImageFormat.Png);
+            }
+            f.Close();
+        }
+
         /// <summary>Captura o FrmImportaRelaciona com uma planilha PESQUISA carregada.</summary>
         public static void RodarImportaRelaciona(string pasta, string xlsx, string png)
         {

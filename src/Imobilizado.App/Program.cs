@@ -74,6 +74,12 @@ namespace Imobilizado.App
                 return;
             }
 
+            if (args.Length > 1 && args[0] == "--capturalanccomposto")
+            {
+                CapturaComposto.RodarLancComposto(args[1]);
+                return;
+            }
+
             if (args.Length > 3 && args[0] == "--capturaimporta")
             {
                 CapturaComposto.RodarImportaRelaciona(args[1], args[2], args[3]);

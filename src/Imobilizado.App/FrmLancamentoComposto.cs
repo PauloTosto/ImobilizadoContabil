@@ -19,8 +19,9 @@ namespace Imobilizado.App
         private readonly PlanoContas _plano;
         private DateTimePicker dtData;
         private ComboBox cboTipo;
-        private TextBox txtPrincipal, txtDoc, txtForn, txtDocFisc;
+        private TextBox txtPrincipal, txtPrincipalValor, txtDoc, txtForn, txtDocFisc;
         private Label lblPrincDesc, lblTotal;
+        private Button btnDiferenca;
         private RadioButton rbDebito, rbCredito;
         private DataGridView dgvLinhas;
         private AutoCompleteStringCollection _fonte;
@@ -56,9 +57,14 @@ namespace Imobilizado.App
             cboTipo.Items.AddRange(new object[] { "Contábil", "Recebimento (R)", "Pagamento (P)" });
             topo.Controls.AddRange(new Control[] { dtData, cboTipo }); y += 32;
 
-            L("Conta principal:", y); txtPrincipal = new TextBox { Location = new Point(cx, y), Width = 300 };
+            L("Conta principal:", y); txtPrincipal = new TextBox { Location = new Point(cx, y), Width = 280 };
             txtPrincipal.TextChanged += (s, e) => AtualizaPrincDesc();
-            topo.Controls.Add(txtPrincipal); y += 26;
+            var lvp = Add(topo, new Label { Text = "Valor (R$):", Location = new Point(410, y + 3), AutoSize = true });
+            // valor do PRINCIPAL (a nota fiscal): digitável, com máscara de centavos (estilo calculadora)
+            txtPrincipalValor = new TextBox { Location = new Point(485, y), Width = 130, TextAlign = HorizontalAlignment.Right, Text = "0,00" };
+            txtPrincipalValor.KeyPress += PrincipalValorKeyPress;
+            txtPrincipalValor.Enter += (s, e) => txtPrincipalValor.SelectAll();
+            topo.Controls.AddRange(new Control[] { txtPrincipal, txtPrincipalValor }); y += 26;
             lblPrincDesc = Add(topo, new Label { Location = new Point(cx, y), AutoSize = true, ForeColor = Color.DimGray, MaximumSize = new Size(480, 0) }); y += 24;
 
             L("Principal é:", y); rbDebito = new RadioButton { Text = "Débito", Location = new Point(cx, y), AutoSize = true };
@@ -88,12 +94,14 @@ namespace Imobilizado.App
                     Autocomplete.Aplicar(tb, _fonte);
             };
 
-            var rodape = new Panel { Dock = DockStyle.Bottom, Height = 44, Padding = new Padding(8) };
-            lblTotal = new Label { Location = new Point(8, 12), AutoSize = true, Font = new Font(Font, FontStyle.Bold) };
-            var btnOk = new Button { Text = "Salvar", Location = new Point(380, 8), Width = 110, Anchor = AnchorStyles.Top | AnchorStyles.Right };
+            var rodape = new Panel { Dock = DockStyle.Bottom, Height = 64, Padding = new Padding(8) };
+            lblTotal = new Label { Location = new Point(8, 6), AutoSize = true, Font = new Font(Font, FontStyle.Bold) };
+            btnDiferenca = new Button { Text = "↓ Lançar diferença", Location = new Point(8, 30), Width = 160, Height = 26 };
+            btnDiferenca.Click += (s, e) => LancarDiferenca();
+            var btnOk = new Button { Text = "Salvar", Location = new Point(380, 28), Width = 110, Height = 28, Anchor = AnchorStyles.Top | AnchorStyles.Right };
             btnOk.Click += (s, e) => Confirmar();
-            var btnCancel = new Button { Text = "Cancelar", DialogResult = DialogResult.Cancel, Location = new Point(500, 8), Width = 110, Anchor = AnchorStyles.Top | AnchorStyles.Right };
-            rodape.Controls.AddRange(new Control[] { lblTotal, btnOk, btnCancel });
+            var btnCancel = new Button { Text = "Cancelar", DialogResult = DialogResult.Cancel, Location = new Point(500, 28), Width = 110, Height = 28, Anchor = AnchorStyles.Top | AnchorStyles.Right };
+            rodape.Controls.AddRange(new Control[] { lblTotal, btnDiferenca, btnOk, btnCancel });
             CancelButton = btnCancel;
 
             Controls.Add(dgvLinhas);
@@ -119,12 +127,55 @@ namespace Imobilizado.App
             else { lblPrincDesc.Text = "conta não encontrada"; lblPrincDesc.ForeColor = Color.Firebrick; }
         }
 
-        private void AtualizaTotal()
+        /// <summary>Máscara de centavos (calculadora) no Valor do principal: 1→0,01; 12→0,12; 123→1,23.</summary>
+        private void PrincipalValorKeyPress(object sender, KeyPressEventArgs e)
+        {
+            var tb = (TextBox)sender;
+            char c = e.KeyChar;
+            if (char.IsControl(c) && c != '\b') return;
+            e.Handled = true;
+            string digitos = new string(tb.Text.Where(char.IsDigit).ToArray()).TrimStart('0');
+            if (c == '\b') digitos = digitos.Length > 0 ? digitos.Substring(0, digitos.Length - 1) : "";
+            else if (c >= '0' && c <= '9') { if (digitos.Length < 15) digitos += c; }
+            else return;
+            decimal cents = digitos.Length == 0 ? 0m : decimal.Parse(digitos, CultureInfo.InvariantCulture);
+            tb.Text = (cents / 100m).ToString("N2", CultureInfo.CurrentCulture);
+            tb.SelectionStart = tb.Text.Length;
+            AtualizaTotal();
+        }
+
+        private decimal SomaContrapartidas()
         {
             decimal total = 0;
             foreach (DataGridViewRow r in dgvLinhas.Rows)
                 if (!r.IsNewRow && decimal.TryParse(Cel(r, "Valor"), NumberStyles.Any, CultureInfo.CurrentCulture, out var v)) total += v;
-            lblTotal.Text = $"Valor do principal (= soma das contrapartidas): R$ {total:N2}";
+            return total;
+        }
+
+        private decimal ValorPrincipalDigitado()
+            => decimal.TryParse(txtPrincipalValor?.Text, NumberStyles.Any, CultureInfo.CurrentCulture, out var v) ? v : 0m;
+
+        private void AtualizaTotal()
+        {
+            decimal soma = SomaContrapartidas();
+            decimal princ = ValorPrincipalDigitado();
+            // se o principal não foi digitado, ele assume a soma (compatível com o comportamento antigo)
+            decimal alvo = princ > 0 ? princ : soma;
+            decimal dif = alvo - soma;   // > 0 = falta distribuir; < 0 = contrapartidas passaram do principal
+            string txtDif = dif == 0 ? "fecha ✓" : (dif > 0 ? $"falta distribuir R$ {dif:N2}" : $"passou R$ {-dif:N2}");
+            lblTotal.Text = $"Contrapartidas: R$ {soma:N2}    Principal: R$ {alvo:N2}    ({txtDif})";
+            lblTotal.ForeColor = dif == 0 ? Color.Green : Color.Firebrick;
+            if (btnDiferenca != null) btnDiferenca.Enabled = dif != 0;
+        }
+
+        /// <summary>Adiciona uma contrapartida em branco com o valor da diferença que falta para fechar o principal.</summary>
+        private void LancarDiferenca()
+        {
+            decimal dif = ValorPrincipalDigitado() - SomaContrapartidas();
+            if (dif <= 0) { Aviso("Não há diferença positiva a lançar (informe o valor do principal e as contrapartidas)."); return; }
+            int i = dgvLinhas.Rows.Add("", dif.ToString("N2", CultureInfo.CurrentCulture), "");
+            dgvLinhas.CurrentCell = dgvLinhas.Rows[i].Cells["Conta"];   // foca a conta p/ o usuário escolher
+            AtualizaTotal();
         }
 
         private static string Cel(DataGridViewRow r, string col) => Convert.ToString(r.Cells[col].Value)?.Trim() ?? "";
@@ -136,6 +187,7 @@ namespace Imobilizado.App
             bool principalDebito = !string.IsNullOrWhiteSpace(m.Debito);
             rbDebito.Checked = principalDebito; rbCredito.Checked = !principalDebito;
             txtPrincipal.Text = principalDebito ? m.Debito : m.Credito;
+            txtPrincipalValor.Text = m.Valor.ToString("N2", CultureInfo.CurrentCulture);
             txtDoc.Text = m.Doc; txtForn.Text = m.Forn;
             // DOC_FISC é a referência fiscal compartilhada; pega do mestre, ou de algum detalhe se o mestre estiver vazio
             txtDocFisc.Text = !string.IsNullOrWhiteSpace(m.DocFisc) ? m.DocFisc
@@ -170,6 +222,15 @@ namespace Imobilizado.App
             if (linhas.Count == 0) { Aviso("Informe pelo menos uma contrapartida."); return; }
 
             decimal total = linhas.Sum(l => l.valor);
+            decimal princVal = ValorPrincipalDigitado();
+            if (princVal <= 0) princVal = total;   // principal não digitado → assume a soma (compatível)
+            if (princVal != total)
+            {
+                Aviso($"O valor do principal (R$ {princVal:N2}) é diferente da soma das contrapartidas (R$ {total:N2}).\n" +
+                      $"Diferença: R$ {(princVal - total):N2}.\n\nA partida dobrada precisa fechar — ajuste as contrapartidas " +
+                      "(o botão \"↓ Lançar diferença\" cria uma linha com o que falta).");
+                return;
+            }
             bool principalDebito = rbDebito.Checked;
             var tipo = cboTipo.SelectedIndex == 1 ? "R" : (cboTipo.SelectedIndex == 2 ? "P" : "");
             bool tpFin = cboTipo.SelectedIndex != 0;
