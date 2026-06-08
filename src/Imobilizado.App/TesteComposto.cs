@@ -160,7 +160,11 @@ namespace Imobilizado.App
                 int meiaFolha = pareado3.Count(l => (string.IsNullOrWhiteSpace(l.Debito) ^ string.IsNullOrWhiteSpace(l.Credito)));
                 P($"Pareamento de folha (SIST_RURAL): {pareado2.Count} -> {pareado3.Count} linhas (meias-entradas agora {meiaFolha})");
 
-                var linhas = exp.MontarLinhas(pareado3, ModoExportAlterData.Reduzido);
+                var pareado4 = exp.ParearNotasFiscais(pareado3);
+                int meiaNf = pareado4.Count(l => (string.IsNullOrWhiteSpace(l.Debito) ^ string.IsNullOrWhiteSpace(l.Credito)));
+                P($"Pareamento de nota fiscal (DOC_FISC): {pareado3.Count} -> {pareado4.Count} linhas (meias-entradas agora {meiaNf})");
+
+                var linhas = exp.MontarLinhas(pareado4, ModoExportAlterData.Reduzido);
 
                 int semMap = linhas.Count(l => l.SemMapeamento);
                 int meia = linhas.Count(l => l.MeiaEntrada);

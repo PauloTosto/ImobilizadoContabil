@@ -145,7 +145,8 @@ namespace Imobilizado.App
 
                 // pareamento: composto (OUTRO_ID) → transferências banco → folha SIST_RURAL
                 // (pós-corte a folha já nasce pareada na origem, então ParearFolha vira no-op)
-                var pareado = exp.ParearFolha(exp.ParearTransferencias(exp.ParearCompostos(lanc)));
+                // pareamento: composto (OUTRO_ID) → transferências banco → folha SIST_RURAL → nota fiscal (DOC_FISC)
+                var pareado = exp.ParearNotasFiscais(exp.ParearFolha(exp.ParearTransferencias(exp.ParearCompostos(lanc))));
                 _linhas = exp.MontarLinhas(pareado, Modo());
 
                 Exibir();

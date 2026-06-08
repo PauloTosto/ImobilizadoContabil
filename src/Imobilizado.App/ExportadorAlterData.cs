@@ -235,6 +235,73 @@ namespace Imobilizado.App
         }
 
         /// <summary>
+        /// Pareia compostos agrupados por NOTA FISCAL (DOC_FISC) — porte do
+        /// SistemaAutomaticos_NotasFiscaisTentaAdvinhar do Contabil2020. Por dia, pega o "pai"
+        /// (maior valor solto de um lado) e os "filhos" do MESMO DOC_FISC do outro lado cuja soma
+        /// (prefixo guloso ordenado ascendente, = listaSomadosNivelUm) bate o pai; vincula os filhos
+        /// (lado vazio recebe a conta do pai) e descarta o pai-agregado. Não afeta o balancete
+        /// (conserva totais por conta); serve ao lote AlterData. Não usa corte de data.
+        /// </summary>
+        public List<LancamentoMovfin> ParearNotasFiscais(List<LancamentoMovfin> orig)
+        {
+            bool EhBanco2(string s) => s != null && s.Trim().Length == 2 && _plano.BancoPorNumero(s.Trim()) != null;
+            var removidos = new HashSet<LancamentoMovfin>();
+            var usados = new HashSet<LancamentoMovfin>();   // já vinculados como filho
+            var falhou = new HashSet<LancamentoMovfin>();   // pai sem match (não tenta de novo)
+
+            bool Livre(LancamentoMovfin r) => !removidos.Contains(r) && !usados.Contains(r);
+
+            foreach (var dia in orig.Where(r => !string.IsNullOrWhiteSpace(r.DocFisc)).Select(r => r.Data).Distinct().ToList())
+            {
+                while (true)
+                {
+                    var credFilled = orig.Where(r => r.Data == dia && Livre(r) && !falhou.Contains(r)
+                        && string.IsNullOrWhiteSpace(r.Debito) && !string.IsNullOrWhiteSpace(r.Credito)
+                        && !string.IsNullOrWhiteSpace(r.DocFisc) && !Estrela(r.Credito) && !EhBanco2(r.Credito)).ToList();
+                    var debFilled = orig.Where(r => r.Data == dia && Livre(r) && !falhou.Contains(r)
+                        && string.IsNullOrWhiteSpace(r.Credito) && !string.IsNullOrWhiteSpace(r.Debito)
+                        && !string.IsNullOrWhiteSpace(r.DocFisc) && !Estrela(r.Debito) && !EhBanco2(r.Debito)).ToList();
+                    if (credFilled.Count == 0 || debFilled.Count == 0) break;
+
+                    decimal maxCred = credFilled.Max(r => r.Valor);
+                    decimal maxDeb = debFilled.Max(r => r.Valor);
+                    if (maxCred > maxDeb)
+                    {
+                        var pai = credFilled.First(r => r.Valor == maxCred);
+                        var docf = (pai.DocFisc ?? "").Trim();
+                        var filhos = SomaPrefixo(debFilled.Where(r => (r.DocFisc ?? "").Trim() == docf).OrderBy(r => r.Valor).ToList(), maxCred);
+                        if (filhos.Count > 0) { foreach (var f in filhos) { f.Credito = pai.Credito; usados.Add(f); } removidos.Add(pai); }
+                        else falhou.Add(pai);
+                    }
+                    else if (maxDeb > maxCred)
+                    {
+                        var pai = debFilled.First(r => r.Valor == maxDeb);
+                        var docf = (pai.DocFisc ?? "").Trim();
+                        var filhos = SomaPrefixo(credFilled.Where(r => (r.DocFisc ?? "").Trim() == docf).OrderBy(r => r.Valor).ToList(), maxDeb);
+                        if (filhos.Count > 0) { foreach (var f in filhos) { f.Debito = pai.Debito; usados.Add(f); } removidos.Add(pai); }
+                        else falhou.Add(pai);
+                    }
+                    else break;   // empate de máximos — evita laço infinito
+                }
+            }
+            return orig.Where(r => !removidos.Contains(r)).ToList();
+        }
+
+        /// <summary>Prefixo guloso (= listaSomadosNivelUm): soma os valores em ordem ASC até bater a meta; senão vazio.</summary>
+        private static List<LancamentoMovfin> SomaPrefixo(List<LancamentoMovfin> ascendente, decimal meta)
+        {
+            var res = new List<LancamentoMovfin>();
+            decimal soma = 0;
+            foreach (var r in ascendente)
+            {
+                soma += Math.Round(r.Valor, 4);
+                res.Add(r);
+                if (Math.Round(soma, 2) == meta) return res;
+            }
+            return new List<LancamentoMovfin>();
+        }
+
+        /// <summary>
         /// Monta as linhas do lote a partir dos lançamentos do MOVFIN.
         /// Replica os filtros do PesquiseRazao: ignora linha com ambos os lados vazios e valor 0;
         /// HIST cai para FORN quando vazio.
