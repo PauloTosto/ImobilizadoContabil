@@ -122,6 +122,7 @@ namespace Imobilizado.App
             Campo<DateTimePicker>("dtDe").Value = new DateTime(int.Parse(d1.Substring(0, 4)), int.Parse(d1.Substring(4, 2)), int.Parse(d1.Substring(6, 2)));
             Campo<DateTimePicker>("dtAte").Value = new DateTime(int.Parse(d2.Substring(0, 4)), int.Parse(d2.Substring(4, 2)), int.Parse(d2.Substring(6, 2)));
             if (Environment.GetEnvironmentVariable("CAP_ABERTOS") == "1") Campo<CheckBox>("chkAbertos").Checked = true;
+            if (Environment.GetEnvironmentVariable("CAP_TRANSF") == "1") Campo<CheckBox>("chkTransf").Checked = true;
             typeof(FrmLancamentos).GetMethod("Carregar", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).Invoke(f, null);
             f.StartPosition = FormStartPosition.Manual;
             f.Location = new Point(0, 0);

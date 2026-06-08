@@ -105,6 +105,12 @@ namespace Imobilizado.App
                 return;
             }
 
+            if (args.Length > 1 && args[0] == "--dumptransf")
+            {
+                TesteComposto.TestaTransf(args[1], args.Length > 2 ? args[2] : "20260101", args.Length > 3 ? args[3] : "20260131");
+                return;
+            }
+
             if (args.Length > 2 && args[0] == "--importrelaciona")
             {
                 TesteComposto.TestaImporta(args[1], args[2], args.Length > 3 ? args[3] : null);

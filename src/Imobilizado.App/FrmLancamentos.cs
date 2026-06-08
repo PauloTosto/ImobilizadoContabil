@@ -20,7 +20,7 @@ namespace Imobilizado.App
         private TextBox txtPasta, txtFiltro;
         private DateTimePicker dtDe, dtAte;
         private ComboBox cboTipo, cboContab;
-        private CheckBox chkAbertos;
+        private CheckBox chkAbertos, chkTransf;
         private Button btnPasta, btnCarregar, btnIncluir, btnAlterar, btnExcluir, btnComposto;
         private DataGridView dgv;
         private Label lblResumo;
@@ -44,7 +44,7 @@ namespace Imobilizado.App
 
         private void MontarUI()
         {
-            var topo = new Panel { Dock = DockStyle.Top, Height = 80, Padding = new Padding(8) };
+            var topo = new Panel { Dock = DockStyle.Top, Height = 104, Padding = new Padding(8) };
             var lblPasta = new Label { Text = "Pasta de dados:", AutoSize = true, Location = new Point(10, 12) };
             txtPasta = new TextBox { Location = new Point(120, 8), Width = 600, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
             btnPasta = new Button { Text = "...", Location = new Point(726, 7), Width = 34, Anchor = AnchorStyles.Top | AnchorStyles.Right };
@@ -61,9 +61,11 @@ namespace Imobilizado.App
             cboTipo.Items.AddRange(new object[] { "Todos", "Contábil", "Financeiro" }); cboTipo.SelectedIndex = 0;
             btnCarregar = new Button { Text = "Carregar", Location = new Point(585, 41), Width = 100 };
             btnCarregar.Click += (s, e) => Carregar();
-            chkAbertos = new CheckBox { Text = "Só compostos que não fecham", AutoSize = true, Location = new Point(705, 46) };
+            chkAbertos = new CheckBox { Text = "Só compostos que não fecham", AutoSize = true, Location = new Point(120, 76) };
             chkAbertos.CheckedChanged += (s, e) => Exibir();
-            topo.Controls.AddRange(new Control[] { lblPasta, txtPasta, btnPasta, lblP, dtDe, lblAte, dtAte, lblT, cboTipo, btnCarregar, chkAbertos });
+            chkTransf = new CheckBox { Text = "Só transferências bancárias", AutoSize = true, Location = new Point(330, 76) };
+            chkTransf.CheckedChanged += (s, e) => Exibir();
+            topo.Controls.AddRange(new Control[] { lblPasta, txtPasta, btnPasta, lblP, dtDe, lblAte, dtAte, lblT, cboTipo, btnCarregar, chkAbertos, chkTransf });
 
             var barra = new Panel { Dock = DockStyle.Top, Height = 36, Padding = new Padding(8, 4, 8, 4) };
             btnIncluir = new Button { Text = "&Incluir", Location = new Point(8, 5), Width = 78, Enabled = false };
@@ -153,9 +155,12 @@ namespace Imobilizado.App
             bool CasaContab(LancamentoMovfin l) => modoContab == 0
                 || (modoContab == 1 ? ValidoContab(l) : !ValidoContab(l));
             var difGrupos = GruposNaoFecham();
+            var transfStatus = AnalisarTransferencias();
             bool soAbertos = chkAbertos?.Checked ?? false;
+            bool soTransf = chkTransf?.Checked ?? false;
             var filtrados = Ordenar(_lancamentos.Where(l => Casa(l) && CasaContab(l)
-                && (!soAbertos || NaoFecha(l, difGrupos))).ToList());
+                && (!soAbertos || NaoFecha(l, difGrupos))
+                && (!soTransf || transfStatus.ContainsKey(l.Recno))).ToList());
             var view = filtrados.Select(l => new
             {
                 l.Recno,
@@ -172,6 +177,8 @@ namespace Imobilizado.App
                 l.Emissor,
                 DocFisc = l.DocFisc,
                 NaoFecha = NaoFecha(l, difGrupos),   // (oculta) composto que não fecha → pinta de laranja
+                Espelho = transfStatus.TryGetValue(l.Recno, out var es) ? (es.Length == 0 ? "ok" : es) : "",
+                TransfProb = transfStatus.TryGetValue(l.Recno, out var ep) && ep.Length > 0,   // (oculta) transferência com problema
             }).ToList();
             dgv.DataSource = view;
             if (dgv.Columns.Contains("Recno")) dgv.Columns["Recno"].Visible = false;
@@ -186,25 +193,31 @@ namespace Imobilizado.App
             if (dgv.Columns.Contains(_ordCol))
                 dgv.Columns[_ordCol].HeaderCell.SortGlyphDirection = _ordAsc ? SortOrder.Ascending : SortOrder.Descending;
             if (dgv.Columns.Contains("NaoFecha")) dgv.Columns["NaoFecha"].Visible = false;
-            // composto que não fecha → laranja (prioridade); pendente p/ contab. → vermelho-claro
+            if (dgv.Columns.Contains("TransfProb")) dgv.Columns["TransfProb"].Visible = false;
+            if (dgv.Columns.Contains("Espelho")) { dgv.Columns["Espelho"].HeaderText = "Espelho"; dgv.Columns["Espelho"].Visible = soTransf; dgv.Columns["Espelho"].FillWeight = 26; }
+            // composto que não fecha OU transferência sem espelho → laranja; pendente p/ contab. → vermelho-claro
             foreach (DataGridViewRow row in dgv.Rows)
             {
                 var item = row.DataBoundItem;
                 bool naoFecha = (item?.GetType().GetProperty("NaoFecha")?.GetValue(item) as bool?) ?? false;
+                bool transfProb = (item?.GetType().GetProperty("TransfProb")?.GetValue(item) as bool?) ?? false;
                 var cont = item?.GetType().GetProperty("Cont")?.GetValue(item) as string;
-                if (naoFecha) row.DefaultCellStyle.BackColor = Color.FromArgb(255, 235, 205);   // laranja-claro
+                if (naoFecha || transfProb) row.DefaultCellStyle.BackColor = Color.FromArgb(255, 235, 205);   // laranja-claro
                 else if (cont == "✗") row.DefaultCellStyle.BackColor = Color.FromArgb(255, 233, 233);
             }
             int validos = filtrados.Count(ValidoContab);
             decimal totDeb = filtrados.Where(l => !string.IsNullOrWhiteSpace(l.Debito)).Sum(l => l.Valor);
             decimal totCred = filtrados.Where(l => !string.IsNullOrWhiteSpace(l.Credito)).Sum(l => l.Valor);
+            int qtdTransfProb = transfStatus.Count(kv => kv.Value.Length > 0);
             string aviso = difGrupos.Count > 0
                 ? $"  |  ⚠ {difGrupos.Count} composto(s) NÃO fecham (Σ |dif| R$ {difGrupos.Values.Sum(Math.Abs):N2})"
                 : "";
-            lblResumo.Text = (f.Length > 0 || modoContab != 0 || soAbertos ? $"{filtrados.Count} de {_lancamentos.Count} lançamentos" : $"{_lancamentos.Count} lançamentos")
+            if (soTransf) aviso += $"  |  {transfStatus.Count} transferência(s)" + (qtdTransfProb > 0 ? $", ⚠ {qtdTransfProb} com espelho que NÃO casa" : " — todas casam ✓");
+            else if (qtdTransfProb > 0) aviso += $"  |  ⚠ {qtdTransfProb} transferência(s) com espelho que não casa";
+            lblResumo.Text = (f.Length > 0 || modoContab != 0 || soAbertos || soTransf ? $"{filtrados.Count} de {_lancamentos.Count} lançamentos" : $"{_lancamentos.Count} lançamentos")
                 + $" | válidos p/ contab.: {validos}, pendentes: {filtrados.Count - validos}"
                 + $" | Débitos R$ {totDeb:N2}   Créditos R$ {totCred:N2}" + aviso;
-            lblResumo.ForeColor = difGrupos.Count > 0 ? Color.Firebrick : SystemColors.ControlText;
+            lblResumo.ForeColor = (difGrupos.Count > 0 || qtdTransfProb > 0) ? Color.Firebrick : SystemColors.ControlText;
         }
 
         /// <summary>True se o lançamento é válido para a contabilidade (contas resolvem no PLACON / banco→CONTAB analítico).</summary>
@@ -245,6 +258,53 @@ namespace Imobilizado.App
 
         private static bool NaoFecha(LancamentoMovfin l, Dictionary<(decimal, string), decimal> dif)
             => l.OutroId != 0 ? dif.ContainsKey((l.OutroId, l.Data)) : dif.ContainsKey((l.MovId, l.Data));
+
+        /// <summary>
+        /// Analisa as TRANSFERÊNCIAS bancárias (espelho financeiro: um lado é código de banco 2-díg,
+        /// o outro é o DESC2 de um banco). Cada transferência são 2 registros espelho com MESMO
+        /// (bancos, valor, data), com as representações cód/DESC2 trocadas. Retorna o status por RECNO
+        /// (só transferências): "" = par espelho OK; senão o motivo do problema. Quem não é
+        /// transferência não entra no dicionário.
+        /// </summary>
+        private Dictionary<int, string> AnalisarTransferencias()
+        {
+            var res = new Dictionary<int, string>();
+            if (_plano == null) return res;
+            bool Len2(string s) => (s ?? "").Trim().Length == 2;
+            bool EhD2(string s) => _plano.EhBancoContabilDesc2((s ?? "").Trim());
+            bool EhTransf(LancamentoMovfin l) => (Len2(l.Debito) && EhD2(l.Credito)) || (Len2(l.Credito) && EhD2(l.Debito));
+            string Norm(string s) => Len2(s) ? _plano.NBancoDesc2((s ?? "").Trim()).Trim() : (s ?? "").Trim();
+
+            var transf = _lancamentos.Where(EhTransf).ToList();
+            if (transf.Count == 0) return res;
+
+            // índices p/ diagnosticar o motivo do registro órfão
+            var porBancoValorData = transf.GroupBy(l => (Norm(l.Debito), Norm(l.Credito), decimal.Round(l.Valor, 2), l.Data)).ToDictionary(g => g.Key, g => g.ToList());
+            var porBancoValor = new HashSet<(string, string, decimal)>(transf.Select(l => (Norm(l.Debito), Norm(l.Credito), decimal.Round(l.Valor, 2))));
+            var porBanco = transf.GroupBy(l => (Norm(l.Debito), Norm(l.Credito))).ToDictionary(g => g.Key, g => g.Count());
+
+            foreach (var l in transf)
+            {
+                var kExato = (Norm(l.Debito), Norm(l.Credito), decimal.Round(l.Valor, 2), l.Data);
+                var par = porBancoValorData[kExato];
+                bool espelhoOk = par.Count == 2 && par.Any(x => Len2(x.Debito)) && par.Any(x => Len2(x.Credito));
+                if (espelhoOk) { res[l.Recno] = ""; continue; }   // par espelho perfeito
+                // órfão: deduz o motivo
+                if (par.Count >= 2) res[l.Recno] = "Espelho duplicado/igual";
+                else if (CountValorOutraData(transf, Norm, l) > 0) res[l.Recno] = "Data diverge";
+                else if (porBanco[(Norm(l.Debito), Norm(l.Credito))] >= 2) res[l.Recno] = "Valor diverge";
+                else res[l.Recno] = "Sem espelho";
+            }
+            return res;
+        }
+
+        /// <summary>Conta quantos OUTROS registros têm o mesmo par de bancos + valor, mas DATA diferente (= data divergente).</summary>
+        private static int CountValorOutraData(List<LancamentoMovfin> transf, Func<string, string> norm, LancamentoMovfin l)
+        {
+            var nd = norm(l.Debito); var nc = norm(l.Credito); var v = decimal.Round(l.Valor, 2);
+            return transf.Count(x => !ReferenceEquals(x, l) && norm(x.Debito) == nd && norm(x.Credito) == nc
+                                     && decimal.Round(x.Valor, 2) == v && x.Data != l.Data);
+        }
 
         private void OrdenarPor(string col)
         {

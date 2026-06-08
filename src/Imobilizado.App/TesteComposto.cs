@@ -22,6 +22,36 @@ namespace Imobilizado.App
             catch (Exception ex) { P("EXCEÇÃO: " + ex); }
         }
 
+        /// <summary>Lista as transferências bancárias (espelho: um lado cód-banco, outro lado DESC2) e agrupa por par de bancos.</summary>
+        public static void TestaTransf(string pasta, string d1, string d2)
+        {
+            var caminho = System.IO.Path.Combine(pasta, "_teste_transf.txt");
+            var log = new System.Text.StringBuilder();
+            Action<string> P = s => { Console.WriteLine(s); log.AppendLine(s); System.IO.File.WriteAllText(caminho, log.ToString()); };
+            try
+            {
+                var plano = Contabil.Core.PlanoContas.Carregar(System.IO.Path.Combine(pasta, "placon.DBF"));
+                var lanc = new MovfinGravador(pasta).LerPeriodo(d1, d2, null);
+                bool Len2(string s) => (s ?? "").Trim().Length == 2;
+                bool EhD2(string s) => plano.EhBancoContabilDesc2((s ?? "").Trim());
+                // candidato de transferência (espelho): um lado é cód de 2 díg, o outro é DESC2 de banco contábil
+                bool EhTransf(LancamentoMovfin l) => (Len2(l.Debito) && EhD2(l.Credito)) || (Len2(l.Credito) && EhD2(l.Debito));
+                string Norm(string s) => Len2(s) ? plano.NBancoDesc2((s ?? "").Trim()).Trim() : (s ?? "").Trim();
+                var transf = lanc.Where(EhTransf).ToList();
+                // par espelho perfeito = 2 registros com mesmo (bancos, valor, data), representações trocadas
+                var porPar = transf.GroupBy(l => (Norm(l.Debito), Norm(l.Credito), decimal.Round(l.Valor, 2), l.Data)).ToList();
+                int casados = porPar.Count(g => g.Count() == 2 && g.Any(x => Len2(x.Debito)) && g.Any(x => Len2(x.Credito)));
+                var problemas = porPar.Where(g => !(g.Count() == 2 && g.Any(x => Len2(x.Debito)) && g.Any(x => Len2(x.Credito)))).ToList();
+                P($"=== Transferências bancárias {d1}..{d2}: {transf.Count} registros | {casados} pares espelho OK | {problemas.Sum(g => g.Count())} registros com PROBLEMA ===");
+                foreach (var g in problemas)
+                {
+                    foreach (var l in g.OrderBy(l => l.Recno))
+                        P($"   ⚠ rec={l.Recno} {l.Data} D=[{l.Debito}] C=[{l.Credito}] V={l.Valor,12:N2} H='{(l.Historico ?? "").Trim()}'");
+                }
+            }
+            catch (Exception ex) { P("EXCEÇÃO: " + ex.Message); }
+        }
+
         /// <summary>Testa a importação PESQUISA → RELACIONA.DBF numa pasta de DESTINO (cópia) e compara com uma pasta de REFERÊNCIA.</summary>
         public static void TestaImporta(string pastaDestino, string xlsx, string pastaRef)
         {
