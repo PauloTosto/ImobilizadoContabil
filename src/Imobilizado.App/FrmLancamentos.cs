@@ -20,6 +20,7 @@ namespace Imobilizado.App
         private TextBox txtPasta, txtFiltro;
         private DateTimePicker dtDe, dtAte;
         private ComboBox cboTipo, cboContab;
+        private CheckBox chkAbertos;
         private Button btnPasta, btnCarregar, btnIncluir, btnAlterar, btnExcluir, btnComposto;
         private DataGridView dgv;
         private Label lblResumo;
@@ -60,7 +61,9 @@ namespace Imobilizado.App
             cboTipo.Items.AddRange(new object[] { "Todos", "Contábil", "Financeiro" }); cboTipo.SelectedIndex = 0;
             btnCarregar = new Button { Text = "Carregar", Location = new Point(585, 41), Width = 100 };
             btnCarregar.Click += (s, e) => Carregar();
-            topo.Controls.AddRange(new Control[] { lblPasta, txtPasta, btnPasta, lblP, dtDe, lblAte, dtAte, lblT, cboTipo, btnCarregar });
+            chkAbertos = new CheckBox { Text = "Só compostos que não fecham", AutoSize = true, Location = new Point(705, 46) };
+            chkAbertos.CheckedChanged += (s, e) => Exibir();
+            topo.Controls.AddRange(new Control[] { lblPasta, txtPasta, btnPasta, lblP, dtDe, lblAte, dtAte, lblT, cboTipo, btnCarregar, chkAbertos });
 
             var barra = new Panel { Dock = DockStyle.Top, Height = 36, Padding = new Padding(8, 4, 8, 4) };
             btnIncluir = new Button { Text = "&Incluir", Location = new Point(8, 5), Width = 78, Enabled = false };
@@ -149,7 +152,10 @@ namespace Imobilizado.App
             int modoContab = cboContab?.SelectedIndex ?? 0;   // 0=todos, 1=válidos, 2=pendentes
             bool CasaContab(LancamentoMovfin l) => modoContab == 0
                 || (modoContab == 1 ? ValidoContab(l) : !ValidoContab(l));
-            var filtrados = Ordenar(_lancamentos.Where(l => Casa(l) && CasaContab(l)).ToList());
+            var difGrupos = GruposNaoFecham();
+            bool soAbertos = chkAbertos?.Checked ?? false;
+            var filtrados = Ordenar(_lancamentos.Where(l => Casa(l) && CasaContab(l)
+                && (!soAbertos || NaoFecha(l, difGrupos))).ToList());
             var view = filtrados.Select(l => new
             {
                 l.Recno,
@@ -165,6 +171,7 @@ namespace Imobilizado.App
                 l.Forn,
                 l.Emissor,
                 DocFisc = l.DocFisc,
+                NaoFecha = NaoFecha(l, difGrupos),   // (oculta) composto que não fecha → pinta de laranja
             }).ToList();
             dgv.DataSource = view;
             if (dgv.Columns.Contains("Recno")) dgv.Columns["Recno"].Visible = false;
@@ -178,23 +185,66 @@ namespace Imobilizado.App
             }
             if (dgv.Columns.Contains(_ordCol))
                 dgv.Columns[_ordCol].HeaderCell.SortGlyphDirection = _ordAsc ? SortOrder.Ascending : SortOrder.Descending;
-            // pinta de vermelho-claro as linhas pendentes (inválidas p/ contabilidade)
+            if (dgv.Columns.Contains("NaoFecha")) dgv.Columns["NaoFecha"].Visible = false;
+            // composto que não fecha → laranja (prioridade); pendente p/ contab. → vermelho-claro
             foreach (DataGridViewRow row in dgv.Rows)
             {
                 var item = row.DataBoundItem;
+                bool naoFecha = (item?.GetType().GetProperty("NaoFecha")?.GetValue(item) as bool?) ?? false;
                 var cont = item?.GetType().GetProperty("Cont")?.GetValue(item) as string;
-                if (cont == "✗") row.DefaultCellStyle.BackColor = Color.FromArgb(255, 233, 233);
+                if (naoFecha) row.DefaultCellStyle.BackColor = Color.FromArgb(255, 235, 205);   // laranja-claro
+                else if (cont == "✗") row.DefaultCellStyle.BackColor = Color.FromArgb(255, 233, 233);
             }
             int validos = filtrados.Count(ValidoContab);
             decimal totDeb = filtrados.Where(l => !string.IsNullOrWhiteSpace(l.Debito)).Sum(l => l.Valor);
             decimal totCred = filtrados.Where(l => !string.IsNullOrWhiteSpace(l.Credito)).Sum(l => l.Valor);
-            lblResumo.Text = (f.Length > 0 || modoContab != 0 ? $"{filtrados.Count} de {_lancamentos.Count} lançamentos" : $"{_lancamentos.Count} lançamentos")
+            string aviso = difGrupos.Count > 0
+                ? $"  |  ⚠ {difGrupos.Count} composto(s) NÃO fecham (Σ |dif| R$ {difGrupos.Values.Sum(Math.Abs):N2})"
+                : "";
+            lblResumo.Text = (f.Length > 0 || modoContab != 0 || soAbertos ? $"{filtrados.Count} de {_lancamentos.Count} lançamentos" : $"{_lancamentos.Count} lançamentos")
                 + $" | válidos p/ contab.: {validos}, pendentes: {filtrados.Count - validos}"
-                + $" | Débitos R$ {totDeb:N2}   Créditos R$ {totCred:N2}";
+                + $" | Débitos R$ {totDeb:N2}   Créditos R$ {totCred:N2}" + aviso;
+            lblResumo.ForeColor = difGrupos.Count > 0 ? Color.Firebrick : SystemColors.ControlText;
         }
 
         /// <summary>True se o lançamento é válido para a contabilidade (contas resolvem no PLACON / banco→CONTAB analítico).</summary>
         private bool ValidoContab(LancamentoMovfin l) => _plano != null && _plano.ValidoParaContabilidade(l.Debito, l.Credito);
+
+        /// <summary>
+        /// Calcula, por grupo COMPOSTO (chave = MOV_ID do mestre + DATA), a diferença Débito−Crédito.
+        /// Retorna só os grupos que NÃO fecham (diferença ≠ 0) → ajuda a achar erro nos dados do servidor.
+        /// Um grupo = o mestre (OUTRO_ID=0, MOV_ID=k) + os detalhes (OUTRO_ID=k), todos na MESMA data.
+        /// </summary>
+        private Dictionary<(decimal mov, string data), decimal> GruposNaoFecham()
+        {
+            // chaves de composto = (MOV_ID do mestre, data) que tenham ao menos um detalhe (OUTRO_ID != 0)
+            var comDetalhe = new HashSet<(decimal, string)>();
+            foreach (var l in _lancamentos)
+                if (l.OutroId != 0) comDetalhe.Add((l.OutroId, l.Data));
+            var res = new Dictionary<(decimal, string), decimal>();
+            if (comDetalhe.Count == 0) return res;
+
+            // acumula débito/crédito por grupo numa passada (mestre conta só se a chave tiver detalhe)
+            var bal = new Dictionary<(decimal, string), (decimal td, decimal tc)>();
+            foreach (var l in _lancamentos)
+            {
+                (decimal, string) k = l.OutroId != 0 ? (l.OutroId, l.Data) : (l.MovId, l.Data);
+                if (!comDetalhe.Contains(k)) continue;
+                bal.TryGetValue(k, out var b);
+                if (!string.IsNullOrWhiteSpace(l.Debito)) b.td += l.Valor;
+                if (!string.IsNullOrWhiteSpace(l.Credito)) b.tc += l.Valor;
+                bal[k] = b;
+            }
+            foreach (var kv in bal)
+            {
+                var dif = decimal.Round(kv.Value.td - kv.Value.tc, 2);
+                if (dif != 0) res[kv.Key] = dif;
+            }
+            return res;
+        }
+
+        private static bool NaoFecha(LancamentoMovfin l, Dictionary<(decimal, string), decimal> dif)
+            => l.OutroId != 0 ? dif.ContainsKey((l.OutroId, l.Data)) : dif.ContainsKey((l.MovId, l.Data));
 
         private void OrdenarPor(string col)
         {
