@@ -64,6 +64,7 @@ namespace Imobilizado.App
                 SelectionMode = DataGridViewSelectionMode.FullRowSelect, RowHeadersVisible = false,
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill, AutoGenerateColumns = true,
             };
+            GridOrdena.Aplicar(dgv);   // ordenar clicando no cabeçalho
 
             var rodape = new Panel { Dock = DockStyle.Bottom, Height = 64, Padding = new Padding(6) };
             lblResumo = new Label { Location = new Point(6, 6), AutoSize = true, Font = new Font(Font, FontStyle.Bold) };

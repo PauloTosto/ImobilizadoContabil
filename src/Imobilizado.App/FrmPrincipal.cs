@@ -143,17 +143,22 @@ namespace Imobilizado.App
             MainMenuStrip = menu;
         }
 
-        private static DataGridView NovaGrade() => new DataGridView
+        private static DataGridView NovaGrade()
         {
-            Dock = DockStyle.Fill,
-            ReadOnly = true,
-            AllowUserToAddRows = false,
-            AllowUserToDeleteRows = false,
-            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
-            RowHeadersVisible = false,
-            AutoGenerateColumns = true,
-        };
+            var g = new DataGridView
+            {
+                Dock = DockStyle.Fill,
+                ReadOnly = true,
+                AllowUserToAddRows = false,
+                AllowUserToDeleteRows = false,
+                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+                RowHeadersVisible = false,
+                AutoGenerateColumns = true,
+            };
+            GridOrdena.Aplicar(g);   // ordenar clicando no cabeçalho
+            return g;
+        }
 
         private void CarregarConfig()
         {

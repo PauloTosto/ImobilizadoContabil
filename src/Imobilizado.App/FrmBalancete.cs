@@ -78,6 +78,7 @@ namespace Imobilizado.App
                 SelectionMode = DataGridViewSelectionMode.FullRowSelect, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
                 AutoGenerateColumns = true,
             };
+            GridOrdena.Aplicar(dgv);   // ordenar clicando no cabeçalho
 
             lblResumo = new Label { Dock = DockStyle.Bottom, Height = 24, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(6, 0, 0, 0), Font = new Font(Font, FontStyle.Bold) };
             status = new StatusStrip(); statusLabel = new ToolStripStatusLabel("Informe a pasta e clique Calcular."); status.Items.Add(statusLabel);

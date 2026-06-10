@@ -144,22 +144,36 @@ namespace Imobilizado.App
         private void Exibir()
         {
             var f = (txtFiltro?.Text ?? "").Trim();
+            // filtro por VALOR: se o texto digitado é um número, casa também pelo valor exato (ex.: "11680" ou "11.680,00")
+            decimal? fValor = decimal.TryParse(f, NumberStyles.Any, CultureInfo.CurrentCulture, out var fv) ? fv : (decimal?)null;
             bool Casa(LancamentoMovfin l) => f.Length == 0
                 || (l.Debito ?? "").IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0
                 || (l.Credito ?? "").IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0
                 || (l.Historico ?? "").IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0
                 || (l.Doc ?? "").IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0
+                || (l.DocFisc ?? "").IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0
                 || (l.Emissor ?? "").IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0
-                || (l.Forn ?? "").IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0;
+                || (l.Forn ?? "").IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0
+                || (fValor.HasValue && decimal.Round(l.Valor, 2) == decimal.Round(fValor.Value, 2));
             int modoContab = cboContab?.SelectedIndex ?? 0;   // 0=todos, 1=válidos, 2=pendentes
             bool CasaContab(LancamentoMovfin l) => modoContab == 0
                 || (modoContab == 1 ? ValidoContab(l) : !ValidoContab(l));
-            var difGrupos = GruposNaoFecham();
+            var difGrupos = GruposNaoFecham(out var fechamViaNf);
             var transfStatus = AnalisarTransferencias();
             bool soAbertos = chkAbertos?.Checked ?? false;
             bool soTransf = chkTransf?.Checked ?? false;
+            // "não fecha" p/ exibição: membro de grupo aberto OU a peça órfã que completa via DOC_FISC
+            bool Aberto(LancamentoMovfin l) => NaoFecha(l, difGrupos) || EhComplementoNf(l);
+            // status do grupo: fecha via doc.fiscal (vínculo OUTRO_ID quebrado, mas a NF completa) ou não fecha mesmo
+            string StatusGrupo(LancamentoMovfin l)
+            {
+                if (EhComplementoNf(l)) return "órfã (completa via doc.fiscal)";
+                if (!NaoFecha(l, difGrupos)) return "";
+                var k = l.OutroId != 0 ? (l.OutroId, l.Data) : (l.MovId, l.Data);
+                return fechamViaNf.Contains(k) ? "fecha via doc.fiscal" : "NÃO fecha";
+            }
             var filtrados = Ordenar(_lancamentos.Where(l => Casa(l) && CasaContab(l)
-                && (!soAbertos || NaoFecha(l, difGrupos))
+                && (!soAbertos || Aberto(l))
                 && (!soTransf || transfStatus.ContainsKey(l.Recno))).ToList());
             var view = filtrados.Select(l => new
             {
@@ -176,7 +190,8 @@ namespace Imobilizado.App
                 l.Forn,
                 l.Emissor,
                 DocFisc = l.DocFisc,
-                NaoFecha = NaoFecha(l, difGrupos),   // (oculta) composto que não fecha → pinta de laranja
+                Grupo = StatusGrupo(l),               // status do composto (vazio / fecha via NF / NÃO fecha / órfã)
+                NaoFecha = Aberto(l),                 // (oculta) → pinta a linha
                 Espelho = transfStatus.TryGetValue(l.Recno, out var es) ? (es.Length == 0 ? "ok" : es) : "",
                 TransfProb = transfStatus.TryGetValue(l.Recno, out var ep) && ep.Length > 0,   // (oculta) transferência com problema
             }).ToList();
@@ -195,6 +210,7 @@ namespace Imobilizado.App
             if (dgv.Columns.Contains("NaoFecha")) dgv.Columns["NaoFecha"].Visible = false;
             if (dgv.Columns.Contains("TransfProb")) dgv.Columns["TransfProb"].Visible = false;
             if (dgv.Columns.Contains("Espelho")) { dgv.Columns["Espelho"].HeaderText = "Espelho"; dgv.Columns["Espelho"].Visible = soTransf; dgv.Columns["Espelho"].FillWeight = 26; }
+            if (dgv.Columns.Contains("Grupo")) { dgv.Columns["Grupo"].HeaderText = "Composto"; dgv.Columns["Grupo"].Visible = soAbertos; dgv.Columns["Grupo"].FillWeight = 30; }
             // composto que não fecha OU transferência sem espelho → laranja; pendente p/ contab. → vermelho-claro
             foreach (DataGridViewRow row in dgv.Rows)
             {
@@ -209,8 +225,11 @@ namespace Imobilizado.App
             decimal totDeb = filtrados.Where(l => !string.IsNullOrWhiteSpace(l.Debito)).Sum(l => l.Valor);
             decimal totCred = filtrados.Where(l => !string.IsNullOrWhiteSpace(l.Credito)).Sum(l => l.Valor);
             int qtdTransfProb = transfStatus.Count(kv => kv.Value.Length > 0);
+            int soDocFisc = fechamViaNf.Count;
             string aviso = difGrupos.Count > 0
-                ? $"  |  ⚠ {difGrupos.Count} composto(s) NÃO fecham (Σ |dif| R$ {difGrupos.Values.Sum(Math.Abs):N2})"
+                ? $"  |  ⚠ {difGrupos.Count} composto(s) não fecham por OUTRO_ID"
+                  + (soDocFisc > 0 ? $" ({soDocFisc} fecham via doc.fiscal)" : "")
+                  + $" (Σ |dif| R$ {difGrupos.Values.Sum(Math.Abs):N2})"
                 : "";
             if (soTransf) aviso += $"  |  {transfStatus.Count} transferência(s)" + (qtdTransfProb > 0 ? $", ⚠ {qtdTransfProb} com espelho que NÃO casa" : " — todas casam ✓");
             else if (qtdTransfProb > 0) aviso += $"  |  ⚠ {qtdTransfProb} transferência(s) com espelho que não casa";
@@ -228,8 +247,14 @@ namespace Imobilizado.App
         /// Retorna só os grupos que NÃO fecham (diferença ≠ 0) → ajuda a achar erro nos dados do servidor.
         /// Um grupo = o mestre (OUTRO_ID=0, MOV_ID=k) + os detalhes (OUTRO_ID=k), todos na MESMA data.
         /// </summary>
-        private Dictionary<(decimal mov, string data), decimal> GruposNaoFecham()
+        /// <summary>Grupos compostos que não fecham por OUTRO_ID. Valor>0/<0 = diferença; o set
+        /// <paramref name="fechamViaDocFisc"/> recebe as chaves cuja diferença SOME quando se inclui
+        /// as meias-entradas soltas do MESMO (DOC_FISC, data) — ou seja, o vínculo OUTRO_ID está
+        /// quebrado mas a nota fiscal completa o grupo (caso típico de dado vindo do servidor).</summary>
+        private Dictionary<(decimal mov, string data), decimal> GruposNaoFecham(out HashSet<(decimal, string)> fechamViaDocFisc)
         {
+            fechamViaDocFisc = new HashSet<(decimal, string)>();
+            _nfComplemento.Clear();
             // chaves de composto = (MOV_ID do mestre, data) que tenham ao menos um detalhe (OUTRO_ID != 0)
             var comDetalhe = new HashSet<(decimal, string)>();
             foreach (var l in _lancamentos)
@@ -237,8 +262,9 @@ namespace Imobilizado.App
             var res = new Dictionary<(decimal, string), decimal>();
             if (comDetalhe.Count == 0) return res;
 
-            // acumula débito/crédito por grupo numa passada (mestre conta só se a chave tiver detalhe)
-            var bal = new Dictionary<(decimal, string), (decimal td, decimal tc)>();
+            // acumula débito/crédito por grupo numa passada (mestre conta só se a chave tiver detalhe);
+            // guarda também o DocFisc dominante do grupo p/ o fallback
+            var bal = new Dictionary<(decimal, string), (decimal td, decimal tc, string docFisc)>();
             foreach (var l in _lancamentos)
             {
                 (decimal, string) k = l.OutroId != 0 ? (l.OutroId, l.Data) : (l.MovId, l.Data);
@@ -246,15 +272,51 @@ namespace Imobilizado.App
                 bal.TryGetValue(k, out var b);
                 if (!string.IsNullOrWhiteSpace(l.Debito)) b.td += l.Valor;
                 if (!string.IsNullOrWhiteSpace(l.Credito)) b.tc += l.Valor;
+                if (string.IsNullOrWhiteSpace(b.docFisc) && !string.IsNullOrWhiteSpace(l.DocFisc)) b.docFisc = l.DocFisc.Trim();
                 bal[k] = b;
             }
+
+            // meias-entradas SOLTAS (fora de qualquer grupo) por (DocFisc, data) — candidatas do fallback
+            var soltasPorNf = new Dictionary<(string, string), (decimal td, decimal tc)>();
+            foreach (var l in _lancamentos)
+            {
+                if (l.OutroId != 0 || comDetalhe.Contains((l.MovId, l.Data))) continue;   // já está num grupo
+                if (string.IsNullOrWhiteSpace(l.DocFisc)) continue;
+                bool meiaD = !string.IsNullOrWhiteSpace(l.Debito) && string.IsNullOrWhiteSpace(l.Credito);
+                bool meiaC = string.IsNullOrWhiteSpace(l.Debito) && !string.IsNullOrWhiteSpace(l.Credito);
+                if (!meiaD && !meiaC) continue;   // só meia-entrada serve de complemento
+                var k = (l.DocFisc.Trim(), l.Data);
+                soltasPorNf.TryGetValue(k, out var b);
+                if (meiaD) b.td += l.Valor; else b.tc += l.Valor;
+                soltasPorNf[k] = b;
+            }
+
             foreach (var kv in bal)
             {
                 var dif = decimal.Round(kv.Value.td - kv.Value.tc, 2);
-                if (dif != 0) res[kv.Key] = dif;
+                if (dif == 0) continue;
+                res[kv.Key] = dif;
+                // FALLBACK: não fechou por OUTRO_ID → tenta completar com as soltas do mesmo (DOC_FISC, data)
+                if (!string.IsNullOrWhiteSpace(kv.Value.docFisc)
+                    && soltasPorNf.TryGetValue((kv.Value.docFisc, kv.Key.Item2), out var s)
+                    && decimal.Round(kv.Value.td + s.td - kv.Value.tc - s.tc, 2) == 0)
+                {
+                    fechamViaDocFisc.Add(kv.Key);
+                    _nfComplemento.Add((kv.Value.docFisc, kv.Key.Item2));   // p/ exibir as peças órfãs junto
+                }
             }
             return res;
         }
+
+        /// <summary>(DOC_FISC, data) dos grupos que fecham via nota fiscal — as meias-entradas soltas
+        /// com essa chave são as "peças órfãs" e aparecem junto no filtro de compostos.</summary>
+        private readonly HashSet<(string, string)> _nfComplemento = new HashSet<(string, string)>();
+
+        /// <summary>True se é meia-entrada SOLTA que complementa um grupo via DOC_FISC (peça órfã).</summary>
+        private bool EhComplementoNf(LancamentoMovfin l)
+            => l.OutroId == 0 && !string.IsNullOrWhiteSpace(l.DocFisc)
+               && (string.IsNullOrWhiteSpace(l.Debito) ^ string.IsNullOrWhiteSpace(l.Credito))
+               && _nfComplemento.Contains((l.DocFisc.Trim(), l.Data));
 
         private static bool NaoFecha(LancamentoMovfin l, Dictionary<(decimal, string), decimal> dif)
             => l.OutroId != 0 ? dif.ContainsKey((l.OutroId, l.Data)) : dif.ContainsKey((l.MovId, l.Data));
