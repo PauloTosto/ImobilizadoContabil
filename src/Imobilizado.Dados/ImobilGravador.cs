@@ -75,9 +75,11 @@ namespace Imobilizado.Dados
                 PNum(cmd, "DEP_UFIR", b.DepreciacaoInicial);
                 PNum(cmd, "VAL_BAIXA", b.ValorBaixa);
                 P(cmd, "COD", OleDbType.Char, 5, b.Codigo);
+                // IMOBIL.DESC qualificado: DESC é palavra reservada no SQL do VFP (ORDER BY ... DESC)
+                // e "SET DESC=?" dá Syntax error; com o prefixo da tabela o VFP aceita.
                 cmd.CommandText =
                     $"UPDATE {Tabela} SET DATA_AQUIS={dAquis}, DATA_CORR={dCorr}, DATA_BAIXA={dBaixa}, " +
-                    "DESC=?, CONTAB=?, DEP_ACUM=?, RESULTADO=?, VAL_AQUIS=?, VAL_UFIR=?, DEP_UFIR=?, " +
+                    $"{Tabela}.DESC=?, CONTAB=?, DEP_ACUM=?, RESULTADO=?, VAL_AQUIS=?, VAL_UFIR=?, DEP_UFIR=?, " +
                     "VAL_BAIXA=? WHERE COD=?";
                 cmd.ExecuteNonQuery();
             }

@@ -22,6 +22,48 @@ namespace Imobilizado.App
             catch (Exception ex) { P("EXCEÇÃO: " + ex); }
         }
 
+        /// <summary>Reproduz o Alterar de um bem (em CÓPIA): lê, troca RESULTADO se pedido, grava e relê.</summary>
+        public static void TestaAlteraBem(string pasta, string cod, string novoResultado)
+        {
+            try
+            {
+                var imobil = System.IO.Path.Combine(pasta, "IMOBIL.DBF");
+                var antes = Imobilizado.Core.Dbf.CadastroDbf.CarregarBensEdicao(imobil).Find(b => b.Codigo == cod);
+                if (antes == null) { Console.WriteLine($"Bem {cod} não encontrado."); return; }
+                Console.WriteLine($"ANTES: cod={antes.Codigo} RESULTADO={antes.ContaResultado} DESC='{(antes.Descricao ?? "").Trim()}'");
+                if (!string.IsNullOrWhiteSpace(novoResultado)) antes.ContaResultado = novoResultado;
+                new ImobilGravador(pasta).Alterar(antes);
+                var depois = Imobilizado.Core.Dbf.CadastroDbf.CarregarBensEdicao(imobil).Find(b => b.Codigo == cod);
+                Console.WriteLine($"DEPOIS: cod={depois.Codigo} RESULTADO={depois.ContaResultado} DESC='{(depois.Descricao ?? "").Trim()}'");
+                Console.WriteLine("ALTERAR OK");
+            }
+            catch (Exception ex) { Console.WriteLine("ERRO: " + ex.Message); }
+        }
+
+        /// <summary>Testa o Incluir de um bem dummy (em CÓPIA) — flagra erro de sintaxe (DESC reservado) no INSERT.</summary>
+        public static void TestaIncluiBem(string pasta)
+        {
+            try
+            {
+                var g = new ImobilGravador(pasta);
+                var dummy = new Imobilizado.Core.Dominio.BemEdicao
+                {
+                    Codigo = "ZZ999", Descricao = "TESTE INCLUIR (apagar)", ContaImobilizado = "12269001",
+                    ContaDepAcumulada = "12278009", ContaResultado = "32170015",
+                    ValorAquisicao = 1.23m, BaseDepreciavel = 1.23m, DepreciacaoInicial = 0m, ValorBaixa = 0m,
+                    DataAquisicao = new DateTime(2026, 1, 1),
+                };
+                if (g.Existe(dummy.Codigo)) { Console.WriteLine("ZZ999 já existe (rode noutra cópia)."); return; }
+                g.Incluir(dummy);
+                var lido = Imobilizado.Core.Dbf.CadastroDbf.CarregarBensEdicao(System.IO.Path.Combine(pasta, "IMOBIL.DBF"))
+                    .Find(b => b.Codigo == "ZZ999");
+                Console.WriteLine(lido != null
+                    ? $"INCLUIR OK: cod={lido.Codigo} DESC='{(lido.Descricao ?? "").Trim()}' RESULTADO={lido.ContaResultado}"
+                    : "INSERIU mas não achou ao reler?!");
+            }
+            catch (Exception ex) { Console.WriteLine("ERRO: " + ex.Message); }
+        }
+
         /// <summary>Dump dos bens do IMOBIL cuja conta dep.acumulada começa com o prefixo + lançamentos que o motor gera p/ elas.</summary>
         public static void DumpImobil(string pasta, string prefixoDepAcum, string anoMes)
         {

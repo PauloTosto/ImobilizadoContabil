@@ -112,6 +112,18 @@ namespace Imobilizado.App
                 return;
             }
 
+            if (args.Length > 1 && args[0] == "--testincluibem")
+            {
+                TesteComposto.TestaIncluiBem(args[1]);
+                return;
+            }
+
+            if (args.Length > 2 && args[0] == "--testalterabem")
+            {
+                TesteComposto.TestaAlteraBem(args[1], args[2], args.Length > 3 ? args[3] : null);
+                return;
+            }
+
             if (args.Length > 2 && args[0] == "--dumpimobil")
             {
                 TesteComposto.DumpImobil(args[1], args[2], args.Length > 3 ? args[3] : "202601");
