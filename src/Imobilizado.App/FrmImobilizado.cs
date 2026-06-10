@@ -190,7 +190,6 @@ namespace Imobilizado.App
                     Conta = b.ContaImobilizado,
                     ContaResultado = b.ContaResultado,     // débito da depreciação (despesa) no PLACON
                     ContaDepAcum = b.ContaDepAcumulada,    // crédito da depreciação (dep. acumulada) no PLACON
-                    Grupo = b.ContaGrupo(),
                     Taxa = _taxas.TryGetValue(b.ContaGrupo(), out var t) ? t : 0m,
                     Base = b.BaseDepreciavel,
                     DepInicial = b.DepreciacaoInicial,
@@ -245,7 +244,7 @@ namespace Imobilizado.App
             }
             H("Codigo", "Código"); H("Descricao", "Descrição"); H("Conta", "Conta imobiliz.");
             H("ContaResultado", "Cta. resultado (déb.)"); H("ContaDepAcum", "Cta. dep.acum. (créd.)");
-            H("Grupo", "Grupo"); H("Taxa", "Taxa%", "N2", true); H("Base", "Base", "N2", true);
+            H("Taxa", "Taxa%", "N2", true); H("Base", "Base", "N2", true);
             H("DepInicial", "Dep.inicial", "N2", true); H("Partida", "Partida");
             H("QuotaMes", "Quota/mês", "N2", true); H("QuotaCompetencia", "Quota compet.", "N2", true);
             H("Situacao", "Situação");

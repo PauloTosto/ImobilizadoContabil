@@ -8,7 +8,6 @@ namespace Imobilizado.App
         public string Conta { get; set; }
         public string ContaResultado { get; set; }    // débito da depreciação (despesa) — PLACON
         public string ContaDepAcum { get; set; }      // crédito da depreciação (dep. acumulada) — PLACON
-        public string Grupo { get; set; }
         public decimal Taxa { get; set; }            // % a.a.
         public decimal Base { get; set; }            // base depreciável (Real)
         public decimal DepInicial { get; set; }

@@ -22,6 +22,31 @@ namespace Imobilizado.App
             catch (Exception ex) { P("EXCEÇÃO: " + ex); }
         }
 
+        /// <summary>Dump dos bens do IMOBIL cuja conta dep.acumulada começa com o prefixo + lançamentos que o motor gera p/ elas.</summary>
+        public static void DumpImobil(string pasta, string prefixoDepAcum, string anoMes)
+        {
+            var caminho = System.IO.Path.Combine(pasta, "_dump_imobil.txt");
+            var log = new System.Text.StringBuilder();
+            Action<string> P = s => { Console.WriteLine(s); log.AppendLine(s); System.IO.File.WriteAllText(caminho, log.ToString()); };
+            try
+            {
+                var bensEd = Imobilizado.Core.Dbf.CadastroDbf.CarregarBensEdicao(System.IO.Path.Combine(pasta, "IMOBIL.DBF"));
+                P($"=== IMOBIL: bens com DEP_ACUM começando '{prefixoDepAcum}' ===");
+                foreach (var b in bensEd.Where(b => (b.ContaDepAcumulada ?? "").StartsWith(prefixoDepAcum)))
+                    P($"   cod={b.Codigo} desc='{(b.Descricao ?? "").Trim()}' IMOB={b.ContaImobilizado} RESULTADO={b.ContaResultado} DEP_ACUM={b.ContaDepAcumulada} base={b.BaseDepreciavel:N2} depIni={b.DepreciacaoInicial:N2} baixa={b.DataBaixa}");
+
+                var bens = bensEd.ConvertAll(be => be.ParaBem());
+                var taxas = Imobilizado.Core.Dbf.CadastroDbf.CarregarTaxas(System.IO.Path.Combine(pasta, "placon.DBF"));
+                var motor = new Imobilizado.Core.MotorDepreciacao(g => taxas.TryGetValue(g, out var t) ? t : 0m);
+                var comp = new Imobilizado.Core.Dominio.AnoMes(int.Parse(anoMes.Substring(0, 4)), int.Parse(anoMes.Substring(4, 2)));
+                var lancs = motor.GerarLancamentos(bens, comp);
+                P($"\n=== MOTOR {comp}: lançamentos com crédito começando '{prefixoDepAcum}' ===");
+                foreach (var l in lancs.Where(l => (l.Credito ?? "").StartsWith(prefixoDepAcum)))
+                    P($"   D={l.Debito} C={l.Credito} V={l.Valor:N2} H='{l.Historico}'");
+            }
+            catch (Exception ex) { P("EXCEÇÃO: " + ex); }
+        }
+
         /// <summary>Lista as transferências bancárias (espelho: um lado cód-banco, outro lado DESC2) e agrupa por par de bancos.</summary>
         public static void TestaTransf(string pasta, string d1, string d2)
         {
