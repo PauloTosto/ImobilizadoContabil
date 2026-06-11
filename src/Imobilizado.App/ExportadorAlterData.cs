@@ -301,6 +301,43 @@ namespace Imobilizado.App
             return new List<LancamentoMovfin>();
         }
 
+        /// <summary>Conta "solteira": aparece no movimento mas NÃO tem correspondência no RELACIONA.DBF.</summary>
+        public sealed class ContaSolteira
+        {
+            public string NumConta { get; set; }
+            public string Desc2 { get; set; }
+            public string Descricao { get; set; }
+            public int Ocorrencias { get; set; }
+            public decimal Soma { get; set; }
+        }
+
+        /// <summary>
+        /// Levanta as CONTAS SOLTEIRAS do movimento (equivale ao btnUnicas/ContasUnicas do
+        /// FrmRelaciona do Contabil2020): cada lado preenchido é resolvido para o NUMCONTA
+        /// (apelido DESC2 ou código de banco → CONTAB) e, se não existir no RELACIONA, entra
+        /// na lista — agregada por conta, com nº de ocorrências e soma dos valores.
+        /// </summary>
+        public List<ContaSolteira> ContasSolteiras(IEnumerable<LancamentoMovfin> lancamentos)
+        {
+            var mapa = new Dictionary<string, ContaSolteira>(StringComparer.OrdinalIgnoreCase);
+            void Lado(string raw, decimal valor)
+            {
+                var v = (raw ?? "").Trim();
+                if (v.Length == 0) return;
+                var nc = _plano.Resolver(v);
+                if (nc == null || _relaciona.ContainsKey(nc)) return;   // não resolveu (outro problema) ou tem REDUZIDO
+                if (!mapa.TryGetValue(nc, out var cs))
+                {
+                    _plano.Contas.TryGetValue(nc, out var c);
+                    mapa[nc] = cs = new ContaSolteira { NumConta = nc, Desc2 = (c?.Desc2 ?? "").Trim(), Descricao = (c?.Descricao ?? "").Trim() };
+                }
+                cs.Ocorrencias++;
+                cs.Soma += valor;
+            }
+            foreach (var l in lancamentos) { Lado(l.Debito, l.Valor); Lado(l.Credito, l.Valor); }
+            return mapa.Values.OrderBy(c => c.NumConta, StringComparer.Ordinal).ToList();
+        }
+
         /// <summary>
         /// Monta as linhas do lote a partir dos lançamentos do MOVFIN.
         /// Replica os filtros do PesquiseRazao: ignora linha com ambos os lados vazios e valor 0;

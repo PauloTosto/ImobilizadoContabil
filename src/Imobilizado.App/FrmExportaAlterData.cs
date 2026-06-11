@@ -25,7 +25,8 @@ namespace Imobilizado.App
         private DateTimePicker dtDe, dtAte;
         private RadioButton rbReduzido, rbNovoCod, rbNumConta;
         private CheckBox chkFechamento, chkPreparados;
-        private Button btnPasta, btnPreparar, btnConferir, btnExportar;
+        private Button btnPasta, btnPreparar, btnConferir, btnSolteiras, btnExportar;
+        private List<ExportadorAlterData.ContaSolteira> _solteiras;
         private Label lblResumo;
         private DataGridView dgv;
         private StatusStrip status;
@@ -69,13 +70,16 @@ namespace Imobilizado.App
             rbNovoCod = new RadioButton { Text = "NOVOCOD", AutoSize = true, Location = new Point(270, 70) };
             rbNumConta = new RadioButton { Text = "NUMCONTA (debug)", AutoSize = true, Location = new Point(370, 70) };
 
-            btnConferir = new Button { Text = "Contas a conferir…", Location = new Point(560, 66), Width = 150, Enabled = false };
+            btnConferir = new Button { Text = "Linhas a conferir…", Location = new Point(516, 66), Width = 130, Enabled = false };
             btnConferir.Click += (s, e) => Conferir();
-            btnExportar = new Button { Text = "Exportar lote…", Location = new Point(716, 66), Width = 130, Enabled = false };
+            // habilita SÓ quando há contas sem correspondência no RELACIONA (= btnUnicas do Contabil2020)
+            btnSolteiras = new Button { Text = "Contas solteiras…", Location = new Point(652, 66), Width = 130, Enabled = false };
+            btnSolteiras.Click += (s, e) => MostrarSolteiras();
+            btnExportar = new Button { Text = "Exportar lote…", Location = new Point(788, 66), Width = 130, Enabled = false };
             btnExportar.Click += (s, e) => Exportar();
 
             topo.Controls.AddRange(new Control[] { lblPasta, txtPasta, btnPasta, lblP, dtDe, lblAte, dtAte,
-                chkFechamento, chkPreparados, btnPreparar, lblModo, rbReduzido, rbNovoCod, rbNumConta, btnConferir, btnExportar });
+                chkFechamento, chkPreparados, btnPreparar, lblModo, rbReduzido, rbNovoCod, rbNumConta, btnConferir, btnSolteiras, btnExportar });
 
             dgv = new DataGridView
             {
@@ -149,9 +153,12 @@ namespace Imobilizado.App
                 // pareamento: composto (OUTRO_ID) → transferências banco → folha SIST_RURAL → nota fiscal (DOC_FISC)
                 var pareado = exp.ParearNotasFiscais(exp.ParearFolha(exp.ParearTransferencias(exp.ParearCompostos(lanc))));
                 _linhas = exp.MontarLinhas(pareado, Modo());
+                _solteiras = exp.ContasSolteiras(pareado);
 
                 Exibir();
                 btnConferir.Enabled = true;
+                btnSolteiras.Enabled = _solteiras.Count > 0;
+                btnSolteiras.Text = _solteiras.Count > 0 ? $"Contas solteiras ({_solteiras.Count})…" : "Contas solteiras…";
                 btnExportar.Enabled = _linhas.Count > 0;
             }
             catch (Exception ex) { Aviso("Erro ao preparar:\n" + ex.Message); }
@@ -235,6 +242,43 @@ namespace Imobilizado.App
             }
             if (pend.Count > 40) sb.AppendLine($"  …e mais {pend.Count - 40}.");
             MessageBox.Show(this, sb.ToString(), "Contas a conferir", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+
+        /// <summary>
+        /// Mostra as CONTAS SOLTEIRAS (sem correspondência no RELACIONA) numa janela com grid —
+        /// equivale ao btnUnicas do FrmRelaciona do Contabil2020. Corrija via planilha PESQUISA
+        /// (AlterData → Importar RELACIONA) e clique Preparar de novo.
+        /// </summary>
+        private void MostrarSolteiras()
+        {
+            if (_solteiras == null || _solteiras.Count == 0) return;
+            var f = new Form
+            {
+                Text = $"Contas solteiras — sem correspondência no RELACIONA ({_solteiras.Count})",
+                StartPosition = FormStartPosition.CenterParent,
+                Size = new Size(760, 440), MinimumSize = new Size(560, 300),
+            };
+            var g = new DataGridView
+            {
+                Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, RowHeadersVisible = false,
+                SelectionMode = DataGridViewSelectionMode.FullRowSelect, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+                AutoGenerateColumns = true,
+            };
+            GridOrdena.Aplicar(g);
+            g.DataSource = _solteiras.Select(c => new
+            { NUMCONTA = c.NumConta, DESC2 = c.Desc2, Descricao = c.Descricao, Ocorrencias = c.Ocorrencias, Soma = c.Soma }).ToList();
+            if (g.Columns.Contains("Descricao")) { g.Columns["Descricao"].HeaderText = "Descrição"; g.Columns["Descricao"].FillWeight = 40; }
+            if (g.Columns.Contains("Ocorrencias")) { g.Columns["Ocorrencias"].HeaderText = "Ocorr."; g.Columns["Ocorrencias"].FillWeight = 12; g.Columns["Ocorrencias"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight; }
+            if (g.Columns.Contains("Soma")) { g.Columns["Soma"].DefaultCellStyle.Format = "N2"; g.Columns["Soma"].FillWeight = 18; g.Columns["Soma"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight; }
+            var rodape = new Label
+            {
+                Dock = DockStyle.Bottom, Height = 26, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(6, 0, 0, 0),
+                Text = "Acrescente essas contas na planilha PESQUISA e importe (AlterData → Importar RELACIONA); depois clique Preparar de novo.",
+                ForeColor = Color.DimGray,
+            };
+            f.Controls.Add(g);
+            f.Controls.Add(rodape);
+            f.Show(this);   // não-modal: dá pra comparar com o lote ao lado
         }
 
         private void Exportar()
