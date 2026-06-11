@@ -53,6 +53,9 @@ namespace Imobilizado.App
             It(mAlter, "Exportar Lote…", (s, e) => { using (var f = new FrmExportaAlterData()) f.ShowDialog(this); });
             It(mAlter, "Importar RELACIONA (planilha PESQUISA)…", (s, e) => { using (var f = new FrmImportaRelaciona()) f.ShowDialog(this); });
 
+            var mUtil = M("&Utilitários");
+            It(mUtil, "Copiar MOVFIN por período…", (s, e) => { using (var f = new FrmCopiaMovfin()) f.ShowDialog(this); });
+
             // painel central com a pasta de dados em uso (informativo)
             var centro = new Label
             {

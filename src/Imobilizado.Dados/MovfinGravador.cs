@@ -37,6 +37,79 @@ namespace Imobilizado.Dados
             return con;
         }
 
+        /// <summary>
+        /// Copia para um NOVO DBF só os registros do MOVFIN com DATA dentro do período
+        /// (inclusive), pulando os marcados como deletados. Cópia BINÁRIA crua (o SELECT…INTO
+        /// TABLE do VFP não funciona via OLE DB — o provider o ignora): copia o cabeçalho
+        /// (estrutura idêntica), filtra registro a registro pelo campo DATA, ajusta o contador
+        /// e limpa o flag de CDX estrutural (a cópia não leva índice). Se houver .FPT (memo),
+        /// ele é copiado INTEIRO — os offsets dos memos continuam válidos.
+        /// <paramref name="destinoSemExtensao"/> = caminho completo SEM extensão (.DBF é criado).
+        /// Retorna a quantidade de registros copiados.
+        /// </summary>
+        public int CopiarPeriodo(string destinoSemExtensao, string data1, string data2)
+        {
+            var destino = destinoSemExtensao ?? throw new ArgumentNullException(nameof(destinoSemExtensao));
+            var dbfDestino = destino + ".DBF";
+            var dbfOrigem = System.IO.Path.Combine(_pastaDados, Tabela + ".DBF");
+            // trava de segurança: nunca sobrescrever o próprio MOVFIN de origem
+            if (string.Equals(System.IO.Path.GetFullPath(dbfDestino), System.IO.Path.GetFullPath(dbfOrigem), StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("O destino não pode ser o próprio MOVFIN.DBF de origem.");
+
+            byte[] cab;
+            int tamCab, tamReg, offData = -1;
+            using (var src = System.IO.File.OpenRead(dbfOrigem))
+            {
+                var h = new byte[32];
+                if (src.Read(h, 0, 32) != 32) throw new InvalidOperationException("DBF de origem inválido.");
+                tamCab = h[8] | (h[9] << 8);
+                tamReg = h[10] | (h[11] << 8);
+                cab = new byte[tamCab];
+                src.Position = 0;
+                src.Read(cab, 0, tamCab);
+
+                // localiza o campo DATA pelos descritores (32 bytes cada, a partir do byte 32)
+                int off = 1;   // byte 0 do registro = flag de deleção
+                for (int p = 32; p + 32 <= tamCab && cab[p] != 0x0D; p += 32)
+                {
+                    int fim = Array.IndexOf(cab, (byte)0, p, 11); if (fim < 0) fim = p + 11;
+                    var nome = System.Text.Encoding.ASCII.GetString(cab, p, fim - p).Trim();
+                    int len = cab[p + 16];
+                    if (nome.Equals("DATA", StringComparison.OrdinalIgnoreCase)) offData = off;
+                    off += len;
+                }
+                if (offData < 0) throw new InvalidOperationException("Campo DATA não encontrado no MOVFIN.");
+
+                cab[28] &= 0xFE;   // limpa o flag de CDX estrutural — a cópia não leva índice
+
+                int n = 0;
+                using (var dst = System.IO.File.Create(dbfDestino))
+                {
+                    dst.Write(cab, 0, tamCab);
+                    var reg = new byte[tamReg];
+                    src.Position = tamCab;
+                    while (src.Read(reg, 0, tamReg) == tamReg)
+                    {
+                        if (reg[0] == 0x2A) continue;   // '*' = deletado
+                        var dt = System.Text.Encoding.ASCII.GetString(reg, offData, 8);   // YYYYMMDD
+                        if (string.Compare(dt, data1, StringComparison.Ordinal) < 0 ||
+                            string.Compare(dt, data2, StringComparison.Ordinal) > 0) continue;
+                        dst.Write(reg, 0, tamReg);
+                        n++;
+                    }
+                    dst.WriteByte(0x1A);   // EOF do DBF
+                    // ajusta a contagem de registros (offset 4, uint32 LE)
+                    dst.Position = 4;
+                    dst.Write(BitConverter.GetBytes(n), 0, 4);
+                }
+
+                var fptOrigem = System.IO.Path.Combine(_pastaDados, Tabela + ".FPT");
+                if (System.IO.File.Exists(fptOrigem))
+                    System.IO.File.Copy(fptOrigem, destino + ".FPT", true);   // memo inteiro → offsets seguem válidos
+                return n;
+            }
+        }
+
         /// <summary>Maior MOV_ID atual da tabela (0 se vazia).</summary>
         public decimal MaiorMovId()
         {

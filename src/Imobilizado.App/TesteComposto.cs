@@ -22,6 +22,35 @@ namespace Imobilizado.App
             catch (Exception ex) { P("EXCEÇÃO: " + ex); }
         }
 
+        /// <summary>Testa CopiarPeriodo do MOVFIN: copia o período p/ um DBF novo e confere a contagem relendo.</summary>
+        public static void TestaCopiaMovfin(string pasta, string d1, string d2, string destinoSemExt)
+        {
+            try
+            {
+                int n = new MovfinGravador(pasta).CopiarPeriodo(destinoSemExt, d1, d2);
+                Console.WriteLine($"CopiarPeriodo reportou {n} registros.");
+                int lidos = 0, foraPeriodo = 0;
+                foreach (var r in new Imobilizado.Core.Dbf.DbfReader(destinoSemExt + ".DBF").Registros())
+                {
+                    lidos++;
+                    var dt = r["DATA"].Trim();
+                    if (string.Compare(dt, d1, StringComparison.Ordinal) < 0 || string.Compare(dt, d2, StringComparison.Ordinal) > 0) foraPeriodo++;
+                }
+                Console.WriteLine($"Relido do DBF copiado: {lidos} registros | fora do período: {foraPeriodo}");
+                // valida também via VFPOLEDB (o consumidor real)
+                var dir = System.IO.Path.GetDirectoryName(destinoSemExt);
+                var nome = System.IO.Path.GetFileName(destinoSemExt);
+                using (var con = new System.Data.OleDb.OleDbConnection($"Provider=VFPOLEDB.1;Data Source={dir}"))
+                {
+                    con.Open();
+                    using (var cmd = new System.Data.OleDb.OleDbCommand($"SELECT COUNT(*) FROM {nome}", con))
+                        Console.WriteLine($"VFPOLEDB lê a cópia: {cmd.ExecuteScalar()} registros");
+                }
+                Console.WriteLine(lidos == n && foraPeriodo == 0 ? "COPIA OK" : "DIVERGÊNCIA!");
+            }
+            catch (Exception ex) { Console.WriteLine("ERRO: " + ex.Message); }
+        }
+
         /// <summary>Reproduz o Alterar de um bem (em CÓPIA): lê, troca RESULTADO se pedido, grava e relê.</summary>
         public static void TestaAlteraBem(string pasta, string cod, string novoResultado)
         {
