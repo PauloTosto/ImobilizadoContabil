@@ -217,6 +217,8 @@ namespace Imobilizado.App
                 if (deb.Length == 0 && cred.Length == 0) { Aviso("Há uma linha sem débito nem crédito. Preencha ou remova a linha."); return; }
                 if (deb.Length > 0 && _plano != null && _plano.Resolver(deb) == null) { Aviso($"Conta de débito não encontrada: {deb}"); return; }
                 if (cred.Length > 0 && _plano != null && _plano.Resolver(cred) == null) { Aviso($"Conta de crédito não encontrada: {cred}"); return; }
+                if (_plano != null && _plano.EhCodigoBanco(deb) && _plano.EhCodigoBanco(cred))
+                { Aviso($"Débito e crédito não podem ser AMBOS código de banco (linha D={deb} C={cred})."); return; }
                 if (!decimal.TryParse(Cel(r, "Valor"), NumberStyles.Any, CultureInfo.CurrentCulture, out var v) || v <= 0)
                 { Aviso($"Valor inválido na linha (D={deb} C={cred})."); return; }
 

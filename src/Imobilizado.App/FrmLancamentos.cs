@@ -17,7 +17,7 @@ namespace Imobilizado.App
     /// </summary>
     public sealed class FrmLancamentos : Form
     {
-        private TextBox txtPasta, txtFiltro;
+        private TextBox txtPasta, txtFiltro, txtValor;
         private DateTimePicker dtDe, dtAte;
         private ComboBox cboTipo, cboContab;
         private CheckBox chkAbertos, chkTransf;
@@ -77,14 +77,17 @@ namespace Imobilizado.App
             btnExcluir = new Button { Text = "&Excluir", Location = new Point(266, 5), Width = 78, Enabled = false };
             btnExcluir.Click += (s, e) => Excluir();
             var lblF = new Label { Text = "Filtrar:", AutoSize = true, Location = new Point(360, 9) };
-            txtFiltro = new TextBox { Location = new Point(408, 6), Width = 180 };
+            txtFiltro = new TextBox { Location = new Point(408, 6), Width = 140 };
             txtFiltro.TextChanged += (s, e) => Exibir();
-            var lblC = new Label { Text = "Contabilidade:", AutoSize = true, Location = new Point(600, 9) };
-            cboContab = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 175, Location = new Point(688, 5) };
+            var lblV = new Label { Text = "Valor:", AutoSize = true, Location = new Point(556, 9) };
+            txtValor = new TextBox { Location = new Point(596, 6), Width = 90, TextAlign = HorizontalAlignment.Right };
+            txtValor.TextChanged += (s, e) => Exibir();
+            var lblC = new Label { Text = "Contabilidade:", AutoSize = true, Location = new Point(700, 9) };
+            cboContab = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 165, Location = new Point(788, 5) };
             cboContab.Items.AddRange(new object[] { "Todos", "Válidos p/ contab.", "Pendentes (inválidos)" });
             cboContab.SelectedIndex = 0;
             cboContab.SelectedIndexChanged += (s, e) => Exibir();
-            barra.Controls.AddRange(new Control[] { btnIncluir, btnComposto, btnAlterar, btnExcluir, lblF, txtFiltro, lblC, cboContab });
+            barra.Controls.AddRange(new Control[] { btnIncluir, btnComposto, btnAlterar, btnExcluir, lblF, txtFiltro, lblV, txtValor, lblC, cboContab });
 
             dgv = new DataGridView
             {
@@ -144,8 +147,8 @@ namespace Imobilizado.App
         private void Exibir()
         {
             var f = (txtFiltro?.Text ?? "").Trim();
-            // filtro por VALOR: se o texto digitado é um número, casa também pelo valor exato (ex.: "11680" ou "11.680,00")
-            decimal? fValor = decimal.TryParse(f, NumberStyles.Any, CultureInfo.CurrentCulture, out var fv) ? fv : (decimal?)null;
+            // filtro de TEXTO: só campos textuais (Débito/Crédito/Histórico/Doc/DocFisc/Emissor/Forn).
+            // A DATA fica de fora de propósito — o período já filtra; e o VALOR tem campo próprio.
             bool Casa(LancamentoMovfin l) => f.Length == 0
                 || (l.Debito ?? "").IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0
                 || (l.Credito ?? "").IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0
@@ -153,8 +156,11 @@ namespace Imobilizado.App
                 || (l.Doc ?? "").IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0
                 || (l.DocFisc ?? "").IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0
                 || (l.Emissor ?? "").IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0
-                || (l.Forn ?? "").IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0
-                || (fValor.HasValue && decimal.Round(l.Valor, 2) == decimal.Round(fValor.Value, 2));
+                || (l.Forn ?? "").IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0;
+            // filtro de VALOR: campo PRÓPRIO e específico — casa pelo valor exato (ex.: 11680 ou 11.680,00)
+            var fvTxt = (txtValor?.Text ?? "").Trim();
+            decimal? fValor = fvTxt.Length > 0 && decimal.TryParse(fvTxt, NumberStyles.Any, CultureInfo.CurrentCulture, out var fv) ? fv : (decimal?)null;
+            bool CasaValor(LancamentoMovfin l) => !fValor.HasValue || decimal.Round(l.Valor, 2) == decimal.Round(fValor.Value, 2);
             int modoContab = cboContab?.SelectedIndex ?? 0;   // 0=todos, 1=válidos, 2=pendentes
             bool CasaContab(LancamentoMovfin l) => modoContab == 0
                 || (modoContab == 1 ? ValidoContab(l) : !ValidoContab(l));
@@ -172,7 +178,7 @@ namespace Imobilizado.App
                 var k = l.OutroId != 0 ? (l.OutroId, l.Data) : (l.MovId, l.Data);
                 return fechamViaNf.Contains(k) ? "fecha via doc.fiscal" : "NÃO fecha";
             }
-            var filtrados = Ordenar(_lancamentos.Where(l => Casa(l) && CasaContab(l)
+            var filtrados = Ordenar(_lancamentos.Where(l => Casa(l) && CasaValor(l) && CasaContab(l)
                 && (!soAbertos || Aberto(l))
                 && (!soTransf || transfStatus.ContainsKey(l.Recno))).ToList());
             var view = filtrados.Select(l => new
@@ -235,7 +241,7 @@ namespace Imobilizado.App
                 : "";
             if (soTransf) aviso += $"  |  {transfStatus.Count} transferência(s)" + (qtdTransfProb > 0 ? $", ⚠ {qtdTransfProb} com espelho que NÃO casa" : " — todas casam ✓");
             else if (qtdTransfProb > 0) aviso += $"  |  ⚠ {qtdTransfProb} transferência(s) com espelho que não casa";
-            lblResumo.Text = (f.Length > 0 || modoContab != 0 || soAbertos || soTransf ? $"{filtrados.Count} de {_lancamentos.Count} lançamentos" : $"{_lancamentos.Count} lançamentos")
+            lblResumo.Text = (f.Length > 0 || fValor.HasValue || modoContab != 0 || soAbertos || soTransf ? $"{filtrados.Count} de {_lancamentos.Count} lançamentos" : $"{_lancamentos.Count} lançamentos")
                 + $" | válidos p/ contab.: {validos}, pendentes: {filtrados.Count - validos}"
                 + $" | Débitos R$ {totDeb:N2}   Créditos R$ {totCred:N2}" + aviso;
             lblResumo.ForeColor = (difGrupos.Count > 0 || qtdTransfProb > 0) ? Color.Firebrick : SystemColors.ControlText;

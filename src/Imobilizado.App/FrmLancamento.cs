@@ -129,6 +129,10 @@ namespace Imobilizado.App
             if (!credVazio && _plano != null && _plano.Resolver(cred) == null) { Aviso("Conta de crédito não encontrada."); return; }
             if (!debVazio && !credVazio && string.Equals(deb, cred, StringComparison.OrdinalIgnoreCase))
             { Aviso("Débito e crédito não podem ser a mesma conta."); return; }
+            // o espelho financeiro exige UM lado por código de banco; os DOIS lados em código de
+            // banco não formam um lançamento válido (não há como saber a direção da transferência)
+            if (_plano != null && _plano.EhCodigoBanco(deb) && _plano.EhCodigoBanco(cred))
+            { Aviso("Débito e crédito não podem ser AMBOS código de banco.\nNuma transferência, um lado é o código do banco e o outro é a conta (DESC2)."); return; }
             if (numValor.Value <= 0) { Aviso("Valor deve ser maior que zero."); return; }
 
             var l = Lancamento;
