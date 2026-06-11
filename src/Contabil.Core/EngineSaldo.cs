@@ -37,6 +37,16 @@ namespace Contabil.Core
         }
 
         /// <summary>
+        /// Uma conta financeira oficial (banco/caixa) só acumula o movimento quando referenciada
+        /// pelo seu CÓDIGO de banco (2 díg) — NÃO pelo apelido. Isso evita dobrar as transferências
+        /// entre contas financeiras (gravadas em 2 registros espelhados no MOVFIN: um com o código,
+        /// outro com o apelido). Contas não-financeiras sempre contam. Espelha o FLT_BAL:
+        /// "DA PRIORIDADE a CONTA FINANCEIRA PELO NUMERO DELA" (tconta = mnemônico do banco, senão DESC2).
+        /// </summary>
+        private bool ContaPorReferencia(string conta, string ladoRaw)
+            => !_plano.EhContaFinanceira(conta) || _plano.EhCodigoBanco(ladoRaw);
+
+        /// <summary>
         /// Saldo de todas as contas até <paramref name="dataLimite"/> ("YYYYMMDD"), numa
         /// única passada pelo MOVFIN. <paramref name="excluir"/> permite ignorar lançamentos
         /// (ex.: o próprio lote SIST_APROP do período, ou manuais de fechamento).
@@ -63,14 +73,28 @@ namespace Contabil.Core
 
                 // débito na conta: conta se a data > âncora da conta e a contrapartida (crédito) passa em check_conta
                 if (contaD != null && _plano.Contas.TryGetValue(contaD, out var cd)
-                    && MaiorQueAncora(data, cd.DataAncora) && CheckConta(credRaw))
+                    && MaiorQueAncora(data, cd.DataAncora) && CheckConta(credRaw) && ContaPorReferencia(contaD, debRaw))
                     saldo[contaD] += valor;
 
                 if (contaC != null && _plano.Contas.TryGetValue(contaC, out var cc)
-                    && MaiorQueAncora(data, cc.DataAncora) && CheckConta(debRaw))
+                    && MaiorQueAncora(data, cc.DataAncora) && CheckConta(debRaw) && ContaPorReferencia(contaC, credRaw))
                     saldo[contaC] -= valor;
             }
             return saldo;
+        }
+
+        /// <summary>
+        /// Movimento "cru" (apelidos não resolvidos) p/ alimentar a apuração a partir de uma lista
+        /// em memória — ex.: a folha do SIST_RURAL já PAREADA (substitui os registros soltos do
+        /// MOVFIN nos períodos pré-corte, p/ o balancete bater com o Contabil2020).
+        /// </summary>
+        public struct Mov
+        {
+            public string Data;     // "YYYYMMDD"
+            public string Debito;   // apelido/cód-banco cru
+            public string Credito;  // apelido/cód-banco cru
+            public decimal Valor;
+            public string Doc;
         }
 
         /// <summary>Apuração de uma conta no período: VAL1 (saldo anterior), VAL2 (débitos), VAL3 (créditos).</summary>
@@ -90,7 +114,7 @@ namespace Contabil.Core
         /// sempre filtrando por check_conta(contrapartida).
         /// </summary>
         public Dictionary<string, Apuracao> ApurarPeriodo(string caminhoMovfin, string data1, string data2,
-            Func<string, string, bool> excluir = null)
+            Func<string, string, bool> excluir = null, IEnumerable<Mov> extra = null)
         {
             var ap = new Dictionary<string, Apuracao>(StringComparer.OrdinalIgnoreCase);
             foreach (var kv in _plano.Contas)
@@ -102,30 +126,53 @@ namespace Contabil.Core
                 var data = r["DATA"].Trim();
                 if (data.Length < 8 || string.Compare(data, data2, StringComparison.Ordinal) > 0) continue;
                 if (excluir != null && excluir(r["DOC"].Trim(), data)) continue;
-
-                var debRaw = r["DEBITO"];
-                var credRaw = r["CREDITO"];
-                var valor = Num(r["VALOR"]);
-                var contaD = _plano.Resolver(debRaw);
-                var contaC = _plano.Resolver(credRaw);
-                bool antes = string.Compare(data, data1, StringComparison.Ordinal) < 0;
-
-                if (contaD != null && _plano.Contas.TryGetValue(contaD, out var cd)
-                    && MaiorQueAncora(data, cd.DataAncora) && CheckConta(credRaw))
-                {
-                    var a = ap[contaD];
-                    if (antes) a.Val1 += valor; else a.Val2 += valor;
-                    ap[contaD] = a;
-                }
-                if (contaC != null && _plano.Contas.TryGetValue(contaC, out var cc)
-                    && MaiorQueAncora(data, cc.DataAncora) && CheckConta(debRaw))
-                {
-                    var a = ap[contaC];
-                    if (antes) a.Val1 -= valor; else a.Val3 += valor;
-                    ap[contaC] = a;
-                }
+                Acumula(ap, r["DEBITO"], r["CREDITO"], Num(r["VALOR"]), data, data1);
             }
+
+            // movimentos extra (ex.: folha SIST_RURAL já pareada) — NÃO passam pelo excluir, pois são
+            // a substituição curada dos registros soltos já removidos no laço acima.
+            if (extra != null)
+                foreach (var m in extra)
+                {
+                    var data = (m.Data ?? "").Trim();
+                    if (data.Length < 8 || string.Compare(data, data2, StringComparison.Ordinal) > 0) continue;
+                    Acumula(ap, m.Debito, m.Credito, m.Valor, data, data1);
+                }
             return ap;
+        }
+
+        /// <summary>Acumula um movimento (débito/crédito crus) na apuração, com check_conta + âncora + referência financeira.</summary>
+        private void Acumula(Dictionary<string, Apuracao> ap, string debRaw, string credRaw, decimal valor, string data, string data1)
+        {
+            // FILTRO "PREPARADO P/ CONTABILIDADE" (mesmo do FrmRazão ao montar o PTMOVFIN): descarta o
+            // registro INTEIRO se algum lado preenchido não casa com um DESC2 analítico (ex.: lançamento
+            // de depreciação gravado com o número cru 32170009, cujo DESC2 é 'ADM # FGTS' — não está apto).
+            if (!_plano.ValidoParaContabilidade(debRaw, credRaw)) return;
+
+            var contaD = _plano.Resolver(debRaw);
+            var contaC = _plano.Resolver(credRaw);
+
+            // EXCLUI débito == crédito (mesma conta dos dois lados) — o balancete do Contabil2020 ignora
+            // esses registros auto-anulados (ex.: salário-família D=IAPAS/C=IAPAS). Saldo não muda (líquido
+            // zero), mas as colunas Débito/Crédito do período ficariam infladas se contássemos.
+            if (contaD != null && contaD == contaC) return;
+
+            bool antes = string.Compare(data, data1, StringComparison.Ordinal) < 0;
+
+            if (contaD != null && _plano.Contas.TryGetValue(contaD, out var cd)
+                && MaiorQueAncora(data, cd.DataAncora) && CheckConta(credRaw) && ContaPorReferencia(contaD, debRaw))
+            {
+                var a = ap[contaD];
+                if (antes) a.Val1 += valor; else a.Val2 += valor;
+                ap[contaD] = a;
+            }
+            if (contaC != null && _plano.Contas.TryGetValue(contaC, out var cc)
+                && MaiorQueAncora(data, cc.DataAncora) && CheckConta(debRaw) && ContaPorReferencia(contaC, credRaw))
+            {
+                var a = ap[contaC];
+                if (antes) a.Val1 -= valor; else a.Val3 += valor;
+                ap[contaC] = a;
+            }
         }
 
         /// <summary>
@@ -150,6 +197,38 @@ namespace Contabil.Core
                     if (resultado.ContainsKey(anc)) resultado[anc] += d;
             }
             return resultado;
+        }
+
+        /// <summary>
+        /// Apuração (Val1/Val2/Val3) de TODAS as contas com ROLLUP nas sintéticas: as analíticas
+        /// têm a sua própria apuração; cada sintética recebe a SOMA das analíticas descendentes
+        /// (saldo anterior, débitos e créditos somados separadamente). É o balancete completo —
+        /// equivale ao Reload() do FrmBalancete do Contabil2020, mas sem depender do SDO sintético
+        /// gravado (rola direto das folhas, como o EngineSaldo já valida 99,7% vs PTPLA).
+        /// </summary>
+        public Dictionary<string, Apuracao> ApurarPeriodoComRollup(string caminhoMovfin, string data1, string data2,
+            Func<string, string, bool> excluir = null, IEnumerable<Mov> extra = null)
+        {
+            var direto = ApurarPeriodo(caminhoMovfin, data1, data2, excluir, extra);
+            var res = new Dictionary<string, Apuracao>(StringComparer.OrdinalIgnoreCase);
+            foreach (var nc in _plano.Contas.Keys) res[nc] = new Apuracao();
+
+            foreach (var kv in _plano.Contas)
+            {
+                if (!HierarquiaContas.EhAnalitica(kv.Key)) continue;     // só folhas têm apuração própria
+                if (!direto.TryGetValue(kv.Key, out var a)) continue;
+                Acumula(res, kv.Key, a);
+                foreach (var anc in HierarquiaContas.Ancestrais(kv.Key))
+                    if (res.ContainsKey(anc)) Acumula(res, anc, a);
+            }
+            return res;
+        }
+
+        private static void Acumula(Dictionary<string, Apuracao> d, string conta, Apuracao a)
+        {
+            var x = d[conta];
+            x.Val1 += a.Val1; x.Val2 += a.Val2; x.Val3 += a.Val3;
+            d[conta] = x;
         }
 
         private static bool MaiorQueAncora(string data, string ancora)

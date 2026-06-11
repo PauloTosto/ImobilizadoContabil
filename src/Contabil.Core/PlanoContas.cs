@@ -25,8 +25,73 @@ namespace Contabil.Core
 
         private readonly Dictionary<string, Conta> _porNumConta = new Dictionary<string, Conta>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string> _apelidoParaConta = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _foraDaAncora = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _contasFinanceiras = new HashSet<string>(StringComparer.OrdinalIgnoreCase);  // CONTAB dos bancos oficiais
+        private readonly HashSet<string> _codigosBanco = new HashSet<string>(StringComparer.OrdinalIgnoreCase);        // NBANCO 2-díg dos bancos oficiais
+
+        /// <summary>Um banco da tabela BANCOS: número (2 díg), apelido DESC2 e conta contábil CONTAB.</summary>
+        public sealed class Banco
+        {
+            public string NBanco;   // "04"
+            public string Desc2;    // apelido (ex.: "BCO_BRASIL")
+            public string Contab;   // conta analítica do plano (CONTAB)
+        }
+        private readonly Dictionary<string, Banco> _bancoPorNumero = new Dictionary<string, Banco>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Banco> _bancoPorDesc2 = new Dictionary<string, Banco>(StringComparer.OrdinalIgnoreCase);
 
         public IReadOnlyDictionary<string, Conta> Contas => _porNumConta;
+
+        /// <summary>Banco pelo número de 2 dígitos (NBANCO). Null se não existir.</summary>
+        public Banco BancoPorNumero(string nb2)
+        {
+            if (string.IsNullOrWhiteSpace(nb2)) return null;
+            var nb = nb2.Trim();
+            if (nb.Length == 1) nb = "0" + nb;
+            return _bancoPorNumero.TryGetValue(nb, out var b) ? b : null;
+        }
+
+        /// <summary>Banco pelo apelido DESC2. Null se não existir.</summary>
+        public Banco BancoPorDesc2(string desc2)
+        {
+            if (string.IsNullOrWhiteSpace(desc2)) return null;
+            return _bancoPorDesc2.TryGetValue(desc2.Trim(), out var b) ? b : null;
+        }
+
+        /// <summary>DESC2 (apelido) do banco com esse número de 2 dígitos; "" se não houver.</summary>
+        public string NBancoDesc2(string nb2) => BancoPorNumero(nb2)?.Desc2 ?? "";
+
+        /// <summary>True se o número de 2 dígitos é um banco com CONTAB preenchido (banco contábil).</summary>
+        public bool EhBancoContabil(string nb2)
+        {
+            var b = BancoPorNumero(nb2);
+            return b != null && !string.IsNullOrWhiteSpace(b.Contab);
+        }
+
+        /// <summary>True se o apelido DESC2 é de um banco com CONTAB preenchido (banco contábil).</summary>
+        public bool EhBancoContabilDesc2(string desc2)
+        {
+            if (string.IsNullOrWhiteSpace(desc2) || desc2.Trim().Length == 2) return false;
+            var b = BancoPorDesc2(desc2);
+            return b != null && !string.IsNullOrWhiteSpace(b.Contab);
+        }
+
+        /// <summary>
+        /// True se a conta é uma conta financeira OFICIAL (é o CONTAB de um banco da tabela BANCOS).
+        /// No balancete, contas financeiras só contam os movimentos referenciados pelo CÓDIGO do
+        /// banco (2 díg) — não pelo apelido — para não dobrar transferências entre contas financeiras
+        /// (espelha o "DA PRIORIDADE a CONTA FINANCEIRA PELO NUMERO DELA" do FLT_BAL).
+        /// </summary>
+        public bool EhContaFinanceira(string numConta) => numConta != null && _contasFinanceiras.Contains(numConta.Trim());
+
+        /// <summary>True se a string é um código de banco de 2 dígitos (NBANCO) de um banco oficial.</summary>
+        public bool EhCodigoBanco(string raw) => raw != null && _codigosBanco.Contains(raw.Trim());
+
+        /// <summary>
+        /// Contas que existem no PLACON (master) mas NÃO no arquivo de âncora (PTPLA&lt;ano-1&gt;) —
+        /// ou seja, contas novas acrescentadas ao plano que ainda não estão no snapshot de saldos.
+        /// Entram no balancete com SDO=0; o usuário pode optar por gravá-las no PTPLA.
+        /// </summary>
+        public IReadOnlyCollection<string> ContasForaDaAncora => _foraDaAncora;
 
         /// <summary>Carrega de um único arquivo (estrutura e âncora vêm do mesmo placon).</summary>
         public static PlanoContas Carregar(string caminhoPlacon) => Carregar(caminhoPlacon, caminhoPlacon);
@@ -72,6 +137,7 @@ namespace Contabil.Core
                     DataAncora = temAncora ? a.data : dataAncoraPadrao,
                 };
                 pc._porNumConta[nc] = c;
+                if (!temAncora) pc._foraDaAncora.Add(nc);   // conta nova: está no placon mas não no PTPLA
                 if (!string.IsNullOrEmpty(c.Desc2) && !pc._apelidoParaConta.ContainsKey(c.Desc2))
                     pc._apelidoParaConta[c.Desc2] = nc;
             }
@@ -89,8 +155,15 @@ namespace Contabil.Core
                     if (contab.Length == 0) continue;
                     var nb = r["NBANCO"].Trim();
                     if (nb.Length == 1) nb = "0" + nb;
+                    var desc2Banco = r["DESC2"].Trim();
                     if (nb.Length > 0 && !pc._apelidoParaConta.ContainsKey(nb))
                         pc._apelidoParaConta[nb] = contab;
+                    if (nb.Length > 0) pc._codigosBanco.Add(nb);   // código do banco oficial
+                    pc._contasFinanceiras.Add(contab);             // CONTAB = conta financeira oficial
+
+                    var banco = new Banco { NBanco = nb, Desc2 = desc2Banco, Contab = contab };
+                    if (nb.Length > 0 && !pc._bancoPorNumero.ContainsKey(nb)) pc._bancoPorNumero[nb] = banco;
+                    if (desc2Banco.Length > 0 && !pc._bancoPorDesc2.ContainsKey(desc2Banco)) pc._bancoPorDesc2[desc2Banco] = banco;
                 }
             }
             return pc;
@@ -104,6 +177,45 @@ namespace Contabil.Core
             if (_apelidoParaConta.TryGetValue(v, out var nc)) return nc;
             if (v.Length == 8 && EhDigitos(v)) return v;
             return null;
+        }
+
+        /// <summary>
+        /// Resolve um lado (DEBITO/CREDITO) do MOVFIN para a conta **analítica** do PLACON, com a
+        /// regra de "válido para a contabilidade" (espelha o Fin_Oficial/Contas_Fin do Clipper):
+        ///  - apelido **DESC2 com correspondência PERFEITA** no PLACON, sendo conta **analítica**; ou
+        ///  - **código de banco (2 dígitos)** que casa em BANCOS e cujo CONTAB é uma conta
+        ///    **analítica existente** no PLACON.
+        /// Retorna o NUMCONTA analítico, ou null se o lado não for válido para a contabilidade.
+        /// (O mapa de apelidos já inclui banco-2-díg → CONTAB; aqui só exige que exista no PLACON
+        /// e seja analítica — o que descarta bancos sem CONTAB no plano e contas sintéticas.)
+        /// </summary>
+        public string ResolverContabil(string debitoOuCredito)
+        {
+            var v = (debitoOuCredito ?? "").Trim();
+            if (v.Length == 0) return null;
+            // Critério "preparado para a contabilidade" = casar com um DESC2 (apelido) EXATO, ou ser
+            // código de banco. NÃO vale número de conta cru: se a conta tem DESC2 diferente da numconta
+            // (ex.: 32170009 cujo DESC2 é 'ADM # FGTS'), um lançamento gravado com o número cru
+            // "32170009" NÃO está apto — o Contabil2020 descarta (não entra no PTMOVFIN). Sem fallback.
+            if (!_apelidoParaConta.TryGetValue(v, out var nc)) return null;    // só DESC2 / banco-2-díg → CONTAB
+            if (!_porNumConta.ContainsKey(nc)) return null;                    // tem que existir no PLACON
+            return EhAnalitica(nc) ? nc : null;                                // e ser analítica
+        }
+
+        /// <summary>
+        /// True se o lançamento (par débito/crédito) é válido para a contabilidade: cada lado
+        /// PREENCHIDO resolve para uma conta analítica do PLACON (ver <see cref="ResolverContabil"/>).
+        /// Meia-entrada (um lado só, típica do composto) é válida se o lado preenchido resolver.
+        /// Linha sem débito nem crédito não é válida.
+        /// </summary>
+        public bool ValidoParaContabilidade(string debito, string credito)
+        {
+            bool temDeb = !string.IsNullOrWhiteSpace(debito);
+            bool temCred = !string.IsNullOrWhiteSpace(credito);
+            if (!temDeb && !temCred) return false;
+            if (temDeb && ResolverContabil(debito) == null) return false;
+            if (temCred && ResolverContabil(credito) == null) return false;
+            return true;
         }
 
         /// <summary>Conta analítica = posições 6-8 do número diferentes de "000" (não é sintética/grupo).</summary>

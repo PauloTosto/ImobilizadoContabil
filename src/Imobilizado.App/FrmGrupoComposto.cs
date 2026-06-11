@@ -217,15 +217,20 @@ namespace Imobilizado.App
                 if (deb.Length == 0 && cred.Length == 0) { Aviso("Há uma linha sem débito nem crédito. Preencha ou remova a linha."); return; }
                 if (deb.Length > 0 && _plano != null && _plano.Resolver(deb) == null) { Aviso($"Conta de débito não encontrada: {deb}"); return; }
                 if (cred.Length > 0 && _plano != null && _plano.Resolver(cred) == null) { Aviso($"Conta de crédito não encontrada: {cred}"); return; }
+                if (_plano != null && _plano.EhCodigoBanco(deb) && _plano.EhCodigoBanco(cred))
+                { Aviso($"Débito e crédito não podem ser AMBOS código de banco (linha D={deb} C={cred})."); return; }
                 if (!decimal.TryParse(Cel(r, "Valor"), NumberStyles.Any, CultureInfo.CurrentCulture, out var v) || v <= 0)
                 { Aviso($"Valor inválido na linha (D={deb} C={cred})."); return; }
 
                 var o = r.Tag as LancamentoMovfin;   // original (null = linha nova)
+                // GARANTE o vínculo OUTRO_ID ao gravar (o servidor às vezes manda detalhe sem o link):
+                // a linha PRINCIPAL fica OUTRO_ID=0; QUALQUER outra linha aponta para o MOV_ID do mestre.
+                bool ehMestre = o != null && o.OutroId == 0 && o.MovId == _mestreMovId;
                 result.Add(new LancamentoMovfin
                 {
                     Recno = o?.Recno ?? 0,
                     MovId = o?.MovId ?? 0,
-                    OutroId = o != null ? o.OutroId : _mestreMovId,   // linha nova entra como detalhe do mestre
+                    OutroId = ehMestre ? 0m : _mestreMovId,   // detalhe (existente OU novo) sempre ligado ao mestre
                     Data = data, Debito = deb, Credito = cred, Valor = v, Historico = hist,
                     Tipo = tipo, TpFin = tpFin, DocFisc = docFisc,
                     Doc = o?.Doc ?? "", Forn = o?.Forn ?? "", Venc = o?.Venc ?? "",

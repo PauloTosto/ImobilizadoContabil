@@ -61,6 +61,7 @@ namespace Imobilizado.App
                 SelectionMode = DataGridViewSelectionMode.FullRowSelect, RowHeadersVisible = false,
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill, AutoGenerateColumns = true,
             };
+            GridOrdena.Aplicar(dgv);   // ordenar clicando no cabeçalho
             dgv.CellDoubleClick += (s, e) => { if (e.RowIndex >= 0) Alterar(); };
 
             lblResumo = new Label { Dock = DockStyle.Bottom, Height = 24, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(6, 0, 0, 0) };

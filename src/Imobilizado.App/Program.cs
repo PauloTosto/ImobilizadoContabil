@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace Imobilizado.App
@@ -24,6 +25,19 @@ namespace Imobilizado.App
                 using (var f7 = new FrmLancamento(null, null)) { var _ = f7.Handle; }
                 using (var f8 = new FrmLancamentoComposto(null, null, null)) { var _ = f8.Handle; }
                 using (var f9 = new FrmGrupoComposto(new System.Collections.Generic.List<Imobilizado.Dados.LancamentoMovfin>(), null)) { var _ = f9.Handle; }
+                using (var f10 = new FrmBalancete()) { var _ = f10.Handle; }
+                using (var f11 = new FrmExportaAlterData()) { var _ = f11.Handle; }
+                using (var f12 = new FrmImportaRelaciona()) { var _ = f12.Handle; }
+                using (var f13 = new FrmImobilizado()) { var _ = f13.Handle; }
+                using (var f14 = new FrmCopiaMovfin()) { var _ = f14.Handle; }
+                using (var f15 = new FrmCadCusto()) { var _ = f15.Handle; }
+                using (var f16 = new FrmCadCustoItem(null, null)) { var _ = f16.Handle; }
+                using (var f17 = new FrmAbsorcao()) { var _ = f17.Handle; }
+                using (var f18 = new FrmRelacEdit()) { var _ = f18.Handle; }
+                using (var f19 = new FrmRelacItem(null, null)) { var _ = f19.Handle; }
+                using (var f20 = new FrmEntSai()) { var _ = f20.Handle; }
+                using (var f21 = new FrmEntSaiItem(null, null)) { var _ = f21.Handle; }
+                using (var f22 = new FrmBalancoProdutos()) { var _ = f22.Handle; }
                 Console.WriteLine("SELFTEST OK");
                 return;
             }
@@ -40,9 +54,172 @@ namespace Imobilizado.App
                 return;
             }
 
+            if (args.Length > 4 && args[0] == "--capturalanc")
+            {
+                CapturaComposto.RodarLanc(args[1], args[2], args[3], args[4]);
+                return;
+            }
+
             if (args.Length > 0 && args[0] == "--testmask")
             {
                 TesteComposto.TestaMascara();
+                return;
+            }
+
+            if (args.Length > 1 && args[0] == "--testcontab")
+            {
+                TesteComposto.TestaContab(args[1], args.Length > 2 ? args[2] : "20250101", args.Length > 3 ? args[3] : "20251231");
+                return;
+            }
+
+            if (args.Length > 1 && args[0] == "--testbalancete")
+            {
+                TesteComposto.TestaBalancete(args[1], args.Length > 2 ? args[2] : "20250101", args.Length > 3 ? args[3] : "20251231");
+                return;
+            }
+
+            if (args.Length > 4 && args[0] == "--capturabalancete")
+            {
+                CapturaComposto.RodarBalancete(args[1], args[2], args[3], args[4]);
+                return;
+            }
+
+            if (args.Length > 1 && args[0] == "--capturalanccomposto")
+            {
+                CapturaComposto.RodarLancComposto(args[1]);
+                return;
+            }
+
+            if (args.Length > 3 && args[0] == "--capturaimporta")
+            {
+                CapturaComposto.RodarImportaRelaciona(args[1], args[2], args[3]);
+                return;
+            }
+
+            if (args.Length > 2 && args[0] == "--capturalancedit")
+            {
+                CapturaComposto.RodarLancEdit(args[1], args[2]);
+                return;
+            }
+
+            if (args.Length > 4 && args[0] == "--capturabalprod")
+            {
+                CapturaComposto.RodarBalProd(args[1], args[2], args[3], args[4]);
+                return;
+            }
+
+            if (args.Length > 2 && args[0] == "--capturacadcusto")
+            {
+                CapturaComposto.RodarCadCusto(args[1], args[2]);
+                return;
+            }
+
+            if (args.Length > 2 && args[0] == "--capturaimob")
+            {
+                CapturaComposto.RodarImobilizado(args[1], args[2]);
+                return;
+            }
+
+            if (args.Length > 1 && args[0] == "--capturaprincipal")
+            {
+                CapturaComposto.RodarPrincipal(args[1]);
+                return;
+            }
+
+            if (args.Length > 1 && args[0] == "--testexcel")
+            {
+                TesteComposto.TestaExcelNovas(args[1], args.Length > 2 ? args[2] : "20250101", args.Length > 3 ? args[3] : "20251231");
+                return;
+            }
+
+            if (args.Length > 1 && args[0] == "--dumpfolha")
+            {
+                TesteComposto.DumpFolha(args[1], args.Length > 2 ? args[2] : "20260101", args.Length > 3 ? args[3] : "20260131",
+                    args.Length > 4 ? args[4] : "SIST_RURAL NW");
+                return;
+            }
+
+            if (args.Length > 2 && args[0] == "--testrelacreal")
+            {
+                TesteComposto.TestaAbsorcaoRelacReal(args[1], args[2]);
+                return;
+            }
+
+            if (args.Length > 2 && args[0] == "--testmotorabsorcao")
+            {
+                TesteComposto.TestaMotorAbsorcao(args[1], args[2]);
+                return;
+            }
+
+            if (args.Length > 2 && args[0] == "--testabsorcao")
+            {
+                TesteComposto.TestaAbsorcao(args[1], args[2]);
+                return;
+            }
+
+            if (args.Length > 1 && args[0] == "--testcadcusto")
+            {
+                TesteComposto.TestaCadCusto(args[1]);
+                return;
+            }
+
+            if (args.Length > 4 && args[0] == "--testcopia")
+            {
+                TesteComposto.TestaCopiaMovfin(args[1], args[2], args[3], args[4]);
+                return;
+            }
+
+            if (args.Length > 1 && args[0] == "--testincluibem")
+            {
+                TesteComposto.TestaIncluiBem(args[1]);
+                return;
+            }
+
+            if (args.Length > 2 && args[0] == "--testalterabem")
+            {
+                TesteComposto.TestaAlteraBem(args[1], args[2], args.Length > 3 ? args[3] : null);
+                return;
+            }
+
+            if (args.Length > 2 && args[0] == "--dumpimobil")
+            {
+                TesteComposto.DumpImobil(args[1], args[2], args.Length > 3 ? args[3] : "202601");
+                return;
+            }
+
+            if (args.Length > 1 && args[0] == "--dumptransf")
+            {
+                TesteComposto.TestaTransf(args[1], args.Length > 2 ? args[2] : "20260101", args.Length > 3 ? args[3] : "20260131");
+                return;
+            }
+
+            if (args.Length > 2 && args[0] == "--importrelaciona")
+            {
+                TesteComposto.TestaImporta(args[1], args[2], args.Length > 3 ? args[3] : null);
+                return;
+            }
+
+            if (args.Length > 2 && args[0] == "--dumpconta")
+            {
+                TesteComposto.DumpConta(args[1], args[2], args.Length > 3 ? args[3] : "20260101", args.Length > 4 ? args[4] : "20260430");
+                return;
+            }
+
+            if (args.Length > 2 && args[0] == "--checkconta")
+            {
+                TesteComposto.TestaConta(args[1], args.Skip(2).ToArray());
+                return;
+            }
+
+            if (args.Length > 1 && args[0] == "--testalterdata")
+            {
+                TesteComposto.TestaAlterData(args[1], args.Length > 2 ? args[2] : "20260101", args.Length > 3 ? args[3] : "20260131");
+                return;
+            }
+
+            if (args.Length > 4 && args[0] == "--capturaalterdata")
+            {
+                CapturaComposto.RodarExportaAlterData(args[1], args[2], args[3], args[4]);
                 return;
             }
 
