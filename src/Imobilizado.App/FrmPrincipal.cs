@@ -51,6 +51,7 @@ namespace Imobilizado.App
             It(mCont, "Apropriações…", (s, e) => Abrir<FrmApropriacao>());
             It(mCont, "Cadastro de Custos (CADCUSTO)…", (s, e) => Abrir<FrmCadCusto>());
             It(mCont, "Absorção de Custo (SIST_ABSOR)…", (s, e) => Abrir<FrmAbsorcao>());
+            It(mCont, "Relações da Absorção (RELAC)…", (s, e) => Abrir<FrmRelacEdit>());
             It(mCont, "Plano de Contas…", (s, e) => Abrir<FrmPlacon>());
             It(mCont, "Balancete…", (s, e) => Abrir<FrmBalancete>());
 

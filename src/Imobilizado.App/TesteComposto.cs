@@ -59,6 +59,40 @@ namespace Imobilizado.App
             catch (Exception ex) { Console.WriteLine("ERRO: " + ex.Message); }
         }
 
+        /// <summary>Valida o MotorAbsorcao com o RELAC.DBF REAL contra a absorção real de um mês.</summary>
+        public static void TestaAbsorcaoRelacReal(string pasta, string anoMes)
+        {
+            try
+            {
+                int ano = int.Parse(anoMes.Substring(0, 4)), mes = int.Parse(anoMes.Substring(4, 2));
+                string d2 = $"{ano:0000}{mes:00}{DateTime.DaysInMonth(ano, mes):00}";
+                var plano = Contabil.Core.PlanoContas.Carregar(System.IO.Path.Combine(pasta, "placon.DBF"),
+                    System.IO.Path.Combine(pasta, $"PTPLA{ano - 1}.DBF"));
+                var eng = new Contabil.Core.EngineSaldo(plano);
+                Func<string, string, bool> excl = (doc, data) => doc == "SIST_ABSOR" && data == d2;
+                var ap = eng.ApurarPeriodoComRollup(System.IO.Path.Combine(pasta, "MOVFIN.DBF"), $"{ano:0000}0101", d2, excl);
+
+                var relac = Contabil.Core.LinhaRelac.Carregar(System.IO.Path.Combine(pasta, "RELAC.DBF"), "A");
+                Console.WriteLine($"RELAC real: {relac.Count} linhas FUNCAO=A");
+                var gerado = Contabil.Core.MotorAbsorcao.Gerar(relac,
+                    g => ap.TryGetValue(g, out var a) ? a.Val2 - a.Val3 : 0m, "1", "3");
+
+                var reais = new MovfinGravador(pasta).LerPeriodo(d2, d2, null)
+                    .Where(l => (l.Doc ?? "").Trim() == "SIST_ABSOR" && !(l.Debito ?? "").StartsWith("*")).ToList();
+
+                var mGer = gerado.GroupBy(x => (x.Debito, x.Credito, x.Valor)).ToDictionary(g => g.Key, g => g.Count());
+                var mReal = reais.GroupBy(x => (x.Debito.Trim(), x.Credito.Trim(), x.Valor)).ToDictionary(g => g.Key, g => g.Count());
+                int iguais = mGer.Keys.Intersect(mReal.Keys).Sum(k => Math.Min(mGer[k], mReal[k]));
+                Console.WriteLine($"Gerados: {gerado.Count} | Reais (ativos): {reais.Count} | casam: {iguais}");
+                foreach (var k in mGer.Keys.Except(mReal.Keys).Take(10))
+                    Console.WriteLine($"  SÓ GERADO: D={k.Item1} C={k.Item2} V={k.Item3:N2}");
+                foreach (var k in mReal.Keys.Except(mGer.Keys).Take(10))
+                    Console.WriteLine($"  SÓ REAL:   D={k.Item1} C={k.Item2} V={k.Item3:N2}");
+                Console.WriteLine(iguais == reais.Count && gerado.Count == reais.Count ? "RELAC REAL OK" : "DIVERGÊNCIA — analisar acima");
+            }
+            catch (Exception ex) { Console.WriteLine("ERRO: " + ex); }
+        }
+
         /// <summary>Valida o MotorAbsorcao reproduzindo a absorção real de um mês (RELAC sintetizado dos próprios lançamentos).</summary>
         public static void TestaMotorAbsorcao(string pasta, string anoMes)
         {

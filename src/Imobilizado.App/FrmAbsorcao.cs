@@ -129,7 +129,7 @@ namespace Imobilizado.App
                 Func<string, string, bool> excl = (doc, data) => doc == "SIST_ABSOR" && data == d2;
                 var ap = eng.ApurarPeriodoComRollup(movfin, d1, d2, excl);
 
-                var relac = LinhaRelac.Carregar(relacPath);
+                var relac = LinhaRelac.Carregar(relacPath, "A");   // só FUNCAO='A' (absorção)
                 _itens = MotorAbsorcao.Gerar(relac,
                     g => ap.TryGetValue(g, out var a) ? a.Val2 - a.Val3 : 0m,
                     txtPrefDeb.Text, txtPrefCred.Text);

@@ -11,18 +11,26 @@ namespace Contabil.Core
     {
         public string Debito;    // conta de ativo/estoque (ex.: 11126001 CACAU EM AMENDOAS)
         public string Credito;   // conta "custo apropriado" do centro (ex.: 31341090)
+        public string Funcao;    // "A" = absorção (linha em branco = inativa/lixo — o Clipper lançava e o usuário tinha que anular com '*')
         public decimal Quant1;   // % do rateio (0 = leva o valor cheio do grupo)
 
-        public static List<LinhaRelac> Carregar(string caminhoRelac)
+        /// <param name="soFuncao">se informado (ex.: "A"), carrega só as linhas dessa FUNCAO —
+        /// filtro que o Clipper NÃO tinha (lançava a linha-lixo de FUNCAO vazia todo mês).</param>
+        public static List<LinhaRelac> Carregar(string caminhoRelac, string soFuncao = null)
         {
             var lista = new List<LinhaRelac>();
             foreach (var r in new DbfReader(caminhoRelac).Registros())
+            {
+                var f = r["FUNCAO"].Trim();
+                if (soFuncao != null && !f.Equals(soFuncao, StringComparison.OrdinalIgnoreCase)) continue;
                 lista.Add(new LinhaRelac
                 {
                     Debito = r["DEBITO"].Trim(),
                     Credito = r["CREDITO"].Trim(),
+                    Funcao = f,
                     Quant1 = decimal.TryParse(r["QUANT1"].Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out var q) ? q : 0m,
                 });
+            }
             return lista;
         }
     }
