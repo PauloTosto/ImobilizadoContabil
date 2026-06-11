@@ -17,7 +17,7 @@ namespace Imobilizado.App
     {
         private readonly bool _incluindo;
         private readonly PlanoContas _plano;
-        private DateTimePicker dtData, dtVenc, dtEmi;
+        private DateTimePicker dtData;
         private ComboBox cboTipo;
         private ComboBuscaConta cboDeb, cboCred;
         private TextBox txtHist, txtDoc, txtForn, txtDocFisc, txtEmissor;
@@ -38,7 +38,7 @@ namespace Imobilizado.App
             FormBorderStyle = FormBorderStyle.FixedDialog;
             StartPosition = FormStartPosition.CenterParent;
             MaximizeBox = false; MinimizeBox = false;
-            ClientSize = new Size(500, 514);
+            ClientSize = new Size(500, 446);
             MontarUI();
             Autocomplete.Aplicar(txtEmissor, Autocomplete.DeContas(_plano));
             Preencher();
@@ -76,11 +76,11 @@ namespace Imobilizado.App
             L("Histórico:"); txtHist = new TextBox { MaxLength = 40, Width = cw }; Linha(txtHist);
             L("Documento:"); txtDoc = new TextBox { MaxLength = 13, Width = 160 }; Linha(txtDoc);
             L("Fornecedor:"); txtForn = new TextBox { MaxLength = 35, Width = cw }; Linha(txtForn);
-            L("Vencimento:"); dtVenc = new DateTimePicker { Format = DateTimePickerFormat.Custom, CustomFormat = "dd/MM/yyyy", ShowCheckBox = true, Checked = false, Width = 130 }; Linha(dtVenc);
             L("Emissor (forn/cli):"); txtEmissor = new TextBox { MaxLength = 8, Width = cw }; txtEmissor.TextChanged += (s, e) => AtualizaDesc(txtEmissor.Text, lblEmissorDesc); Linha(txtEmissor, 24);
             lblEmissorDesc = new Label { Location = new Point(cx, y), AutoSize = true, ForeColor = Color.DimGray, MaximumSize = new Size(cw, 0) }; Controls.Add(lblEmissorDesc); y += 26;
             L("Doc. fiscal:"); txtDocFisc = new TextBox { MaxLength = 13, Width = 160 }; Linha(txtDocFisc);
-            L("Data emissão:"); dtEmi = new DateTimePicker { Format = DateTimePickerFormat.Custom, CustomFormat = "dd/MM/yyyy", ShowCheckBox = true, Checked = false, Width = 130 }; Linha(dtEmi);
+            // Vencimento não é editado aqui (o valor existente é preservado);
+            // a data de EMISSÃO é sempre a data do documento (campo Data).
 
             var btnOk = new Button { Text = _incluindo ? "Incluir" : "Salvar", Location = new Point(cx, y + 6), Width = 120 };
             btnOk.Click += (s, e) => Confirmar();
@@ -106,8 +106,6 @@ namespace Imobilizado.App
             numValor.Value = Math.Min(numValor.Maximum, Math.Max(0, l.Valor));
             txtHist.Text = l.Historico; txtDoc.Text = l.Doc; txtForn.Text = l.Forn; txtDocFisc.Text = l.DocFisc;
             txtEmissor.Text = l.Emissor;
-            if (DateTime.TryParseExact(l.Venc, "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out var v)) { dtVenc.Value = v; dtVenc.Checked = true; }
-            if (DateTime.TryParseExact(l.DataEmi, "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out var de)) { dtEmi.Value = de; dtEmi.Checked = true; }
         }
 
         private void AtualizaDesc(string valor, Label lbl)
@@ -142,8 +140,9 @@ namespace Imobilizado.App
             l.Historico = txtHist.Text.Trim(); l.Doc = txtDoc.Text.Trim();
             l.Forn = txtForn.Text.Trim(); l.DocFisc = txtDocFisc.Text.Trim();
             l.Emissor = txtEmissor.Text.Trim();
-            l.Venc = dtVenc.Checked ? dtVenc.Value.ToString("yyyyMMdd") : "";
-            l.DataEmi = dtEmi.Checked ? dtEmi.Value.ToString("yyyyMMdd") : "";
+            // Vencimento: preservado como está (não se edita aqui).
+            // Data de emissão: SEMPRE a data do documento.
+            l.DataEmi = l.Data;
             DialogResult = DialogResult.OK;
             Close();
         }

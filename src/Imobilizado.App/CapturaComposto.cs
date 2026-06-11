@@ -159,6 +159,28 @@ namespace Imobilizado.App
             f.Close();
         }
 
+        /// <summary>Captura o FrmLancamento (diálogo de edição) com um lançamento real.</summary>
+        public static void RodarLancEdit(string pasta, string png)
+        {
+            var plano = Contabil.Core.PlanoContas.Carregar(System.IO.Path.Combine(pasta, "placon.DBF"));
+            var l = new MovfinGravador(pasta).LerPeriodo("20260101", "20260131", null)
+                .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.Debito) && !string.IsNullOrWhiteSpace(x.Credito));
+            var f = new FrmLancamento(l, plano);
+            var _h = f.Handle;
+            f.StartPosition = FormStartPosition.Manual;
+            f.Location = new Point(0, 0);
+            f.Show();
+            Application.DoEvents();
+            System.Threading.Thread.Sleep(300);
+            Application.DoEvents();
+            using (var bmp = new Bitmap(f.Width, f.Height))
+            {
+                using (var gr = Graphics.FromImage(bmp)) { var hdc = gr.GetHdc(); PrintWindow(f.Handle, hdc, 0); gr.ReleaseHdc(hdc); }
+                bmp.Save(png, System.Drawing.Imaging.ImageFormat.Png);
+            }
+            f.Close();
+        }
+
         /// <summary>Captura o FrmPrincipal (menu) para conferência visual.</summary>
         public static void RodarPrincipal(string png)
         {
