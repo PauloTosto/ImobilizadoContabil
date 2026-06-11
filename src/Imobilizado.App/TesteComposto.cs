@@ -22,6 +22,38 @@ namespace Imobilizado.App
             catch (Exception ex) { P("EXCEÇÃO: " + ex); }
         }
 
+        /// <summary>Testa o CRUD do CADCUSTO numa CÓPIA: lista, inclui dummy, altera, exclui, confere contagens.</summary>
+        public static void TestaCadCusto(string pasta)
+        {
+            try
+            {
+                var cad = System.IO.Path.Combine(pasta, "CADCUSTO.DBF");
+                int n0 = Contabil.Core.Apropriacao.ProdutoCusto.Carregar(cad).Count;
+                Console.WriteLine($"CADCUSTO: {n0} produtos.");
+                var g = new CadCustoGravador(pasta);
+                var dummy = new CadCustoGravador.ItemCadCusto
+                {
+                    Cod = "Z999", Desc = "TESTE CRUD", Producao = "11125001", EmCurso = "11126001",
+                    Receita = "31110001", CustoVenda = "31330001", Unid = "KILOS",
+                    Estoque = 12.34m, Data = new DateTime(2026, 1, 31), Perc1 = 10m,
+                };
+                if (g.Existe(dummy.Cod)) { Console.WriteLine("Z999 já existe."); return; }
+                g.Incluir(dummy);
+                var aposInc = Contabil.Core.Apropriacao.ProdutoCusto.Carregar(cad);
+                var z = aposInc.Find(i => i.Cod == "Z999");
+                Console.WriteLine($"Incluiu: {aposInc.Count} produtos | Z999 desc='{(z?.Desc ?? "").Trim()}' prod={z?.Producao} est={z?.Estoque} data={z?.Data} p1={z?.Perc1}");
+                dummy.Desc = "TESTE ALTERADO"; dummy.Perc1 = 25m;
+                g.Alterar(dummy);
+                z = Contabil.Core.Apropriacao.ProdutoCusto.Carregar(cad).Find(i => i.Cod == "Z999");
+                Console.WriteLine($"Alterou: desc='{(z?.Desc ?? "").Trim()}' p1={z?.Perc1}");
+                g.Excluir("Z999");
+                int nf = Contabil.Core.Apropriacao.ProdutoCusto.Carregar(cad).Count;
+                Console.WriteLine($"Excluiu: {nf} produtos.");
+                Console.WriteLine(nf == n0 && z != null && z.Desc.Trim() == "TESTE ALTERADO" && z.Perc1 == 25m ? "CRUD OK" : "DIVERGÊNCIA!");
+            }
+            catch (Exception ex) { Console.WriteLine("ERRO: " + ex.Message); }
+        }
+
         /// <summary>Testa CopiarPeriodo do MOVFIN: copia o período p/ um DBF novo e confere a contagem relendo.</summary>
         public static void TestaCopiaMovfin(string pasta, string d1, string d2, string destinoSemExt)
         {

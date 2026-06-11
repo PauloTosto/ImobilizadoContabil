@@ -49,6 +49,7 @@ namespace Imobilizado.App
             var mCont = M("&Contabilidade");
             It(mCont, "Lançamentos…", (s, e) => Abrir<FrmLancamentos>());
             It(mCont, "Apropriações…", (s, e) => Abrir<FrmApropriacao>());
+            It(mCont, "Cadastro de Custos (CADCUSTO)…", (s, e) => Abrir<FrmCadCusto>());
             It(mCont, "Plano de Contas…", (s, e) => Abrir<FrmPlacon>());
             It(mCont, "Balancete…", (s, e) => Abrir<FrmBalancete>());
 
