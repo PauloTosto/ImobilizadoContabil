@@ -35,6 +35,9 @@ namespace Imobilizado.App
                 using (var f17 = new FrmAbsorcao()) { var _ = f17.Handle; }
                 using (var f18 = new FrmRelacEdit()) { var _ = f18.Handle; }
                 using (var f19 = new FrmRelacItem(null, null)) { var _ = f19.Handle; }
+                using (var f20 = new FrmEntSai()) { var _ = f20.Handle; }
+                using (var f21 = new FrmEntSaiItem(null, null)) { var _ = f21.Handle; }
+                using (var f22 = new FrmBalancoProdutos()) { var _ = f22.Handle; }
                 Console.WriteLine("SELFTEST OK");
                 return;
             }
@@ -90,6 +93,12 @@ namespace Imobilizado.App
             if (args.Length > 3 && args[0] == "--capturaimporta")
             {
                 CapturaComposto.RodarImportaRelaciona(args[1], args[2], args[3]);
+                return;
+            }
+
+            if (args.Length > 4 && args[0] == "--capturabalprod")
+            {
+                CapturaComposto.RodarBalProd(args[1], args[2], args[3], args[4]);
                 return;
             }
 

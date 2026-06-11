@@ -49,11 +49,17 @@ namespace Imobilizado.App
             var mCont = M("&Contabilidade");
             It(mCont, "Lançamentos…", (s, e) => Abrir<FrmLancamentos>());
             It(mCont, "Apropriações…", (s, e) => Abrir<FrmApropriacao>());
-            It(mCont, "Cadastro de Custos (CADCUSTO)…", (s, e) => Abrir<FrmCadCusto>());
-            It(mCont, "Absorção de Custo (SIST_ABSOR)…", (s, e) => Abrir<FrmAbsorcao>());
-            It(mCont, "Relações da Absorção (RELAC)…", (s, e) => Abrir<FrmRelacEdit>());
             It(mCont, "Plano de Contas…", (s, e) => Abrir<FrmPlacon>());
             It(mCont, "Balancete…", (s, e) => Abrir<FrmBalancete>());
+
+            // espelha a aba "Operações" do Clipper (GERCON): Relações, Custo_Cad, Estok_Produto, Balanco_Prods
+            var mOper = M("&Operações");
+            It(mOper, "Relações da Absorção (RELAC)…", (s, e) => Abrir<FrmRelacEdit>());
+            It(mOper, "Cadastro de Custos (CADCUSTO)…", (s, e) => Abrir<FrmCadCusto>());
+            It(mOper, "Estoque por Produto (ENTSAI)…", (s, e) => Abrir<FrmEntSai>());
+            It(mOper, "Balanço de Produtos…", (s, e) => Abrir<FrmBalancoProdutos>());
+            mOper.DropDownItems.Add(new ToolStripSeparator());
+            It(mOper, "Absorção de Custo (SIST_ABSOR)…", (s, e) => Abrir<FrmAbsorcao>());
 
             var mAlter = M("&AlterData");
             It(mAlter, "Exportar Lote…", (s, e) => Abrir<FrmExportaAlterData>());
