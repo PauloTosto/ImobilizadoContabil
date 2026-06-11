@@ -178,7 +178,6 @@ namespace Imobilizado.App
             var view = filtrados.Select(l => new
             {
                 l.Recno,
-                l.MovId,
                 Cont = ValidoContab(l) ? "✓" : "✗",   // válido para a contabilidade?
                 Data = Fmt(l.Data),
                 l.Debito,
@@ -197,8 +196,11 @@ namespace Imobilizado.App
             }).ToList();
             dgv.DataSource = view;
             if (dgv.Columns.Contains("Recno")) dgv.Columns["Recno"].Visible = false;
-            if (dgv.Columns.Contains("MovId")) dgv.Columns["MovId"].HeaderText = "MOV_ID";
-            if (dgv.Columns.Contains("Cont")) { dgv.Columns["Cont"].HeaderText = "Cont."; dgv.Columns["Cont"].FillWeight = 22; dgv.Columns["Cont"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter; dgv.Columns["Cont"].ToolTipText = "Válido para a contabilidade (✓) ou pendente (✗)"; }
+            // larguras proporcionais: Débito/Crédito/Histórico (campos longos) ganham mais espaço
+            void Larg(string n, int w) { if (dgv.Columns.Contains(n)) dgv.Columns[n].FillWeight = w; }
+            Larg("Cont", 7); Larg("Data", 14); Larg("Debito", 26); Larg("Credito", 26); Larg("Valor", 15);
+            Larg("Tipo", 11); Larg("Historico", 36); Larg("Doc", 12); Larg("Forn", 14); Larg("Emissor", 12); Larg("DocFisc", 12);
+            if (dgv.Columns.Contains("Cont")) { dgv.Columns["Cont"].HeaderText = "Cont."; dgv.Columns["Cont"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter; dgv.Columns["Cont"].ToolTipText = "Válido para a contabilidade (✓) ou pendente (✗)"; }
             if (dgv.Columns.Contains("Valor")) { dgv.Columns["Valor"].DefaultCellStyle.Format = "N2"; dgv.Columns["Valor"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight; }
             foreach (DataGridViewColumn c in dgv.Columns)
             {
