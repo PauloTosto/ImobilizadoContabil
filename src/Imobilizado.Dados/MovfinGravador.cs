@@ -332,6 +332,59 @@ namespace Imobilizado.Dados
             }
         }
 
+        /// <summary>Conta os lançamentos com este DOC nesta DATA (ex.: SIST_ABSOR já gerado no dia).</summary>
+        public int ContarPorDocData(string doc, string data)
+        {
+            using (var con = AbrirConexao())
+            using (var cmd = new OleDbCommand($"SELECT COUNT(*) FROM {Tabela} WHERE DOC=? AND DATA=?", con))
+            {
+                cmd.Parameters.Add("dc", OleDbType.Char, 13).Value = (doc ?? "").Trim();
+                cmd.Parameters.Add("dt", OleDbType.Date).Value = ParseData(data);
+                return Convert.ToInt32(cmd.ExecuteScalar());
+            }
+        }
+
+        /// <summary>Exclui os lançamentos com este DOC nesta DATA (reprocessar a absorção do dia).</summary>
+        public int ExcluirPorDocData(string doc, string data)
+        {
+            using (var con = AbrirConexao())
+            using (var cmd = new OleDbCommand($"DELETE FROM {Tabela} WHERE DOC=? AND DATA=?", con))
+            {
+                cmd.Parameters.Add("dc", OleDbType.Char, 13).Value = (doc ?? "").Trim();
+                cmd.Parameters.Add("dt", OleDbType.Date).Value = ParseData(data);
+                return cmd.ExecuteNonQuery();
+            }
+        }
+
+        /// <summary>
+        /// Insere lançamentos SIMPLES com MOV_ID=0 (fiel ao APPEND BLANK do Clipper — a absorção
+        /// histórica tem MOV_ID=0/OUTRO_ID=0). Retorna a quantidade gravada.
+        /// </summary>
+        public int InserirComMovIdZero(System.Collections.Generic.IReadOnlyList<LancamentoMovfin> lancs)
+        {
+            using (var con = AbrirConexao())
+            {
+                var adapter = new OleDbDataAdapter($"SELECT * FROM {Tabela} WHERE MOV_ID = -999999999", con);
+                using (var builder = new OleDbCommandBuilder(adapter))
+                {
+                    adapter.InsertCommand = builder.GetInsertCommand();
+                    var ds = new DataSet(); adapter.Fill(ds, Tabela);
+                    var dt = ds.Tables[Tabela];
+                    foreach (var l in lancs)
+                    {
+                        var row = dt.NewRow();
+                        InicializarDefaults(row, dt);
+                        AplicarCampos(row, l);
+                        row["MOV_ID"] = 0m;
+                        row["OUTRO_ID"] = 0m;
+                        dt.Rows.Add(row);
+                    }
+                    adapter.Update(dt);
+                    return lancs.Count;
+                }
+            }
+        }
+
         /// <summary>Altera um lançamento existente (por MOV_ID). Preserva a identidade.</summary>
         public void AlterarLancamento(LancamentoMovfin l)
         {

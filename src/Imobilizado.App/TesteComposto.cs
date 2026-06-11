@@ -22,6 +22,85 @@ namespace Imobilizado.App
             catch (Exception ex) { P("EXCEÇÃO: " + ex); }
         }
 
+        /// <summary>Valida a regra da ABSORÇÃO: p/ cada SIST_ABSOR existente, compara o valor com Val2−Val3 do GRUPO do crédito (mês vs ano-até), excluindo o próprio SIST_ABSOR.</summary>
+        public static void TestaAbsorcao(string pasta, string anoMes)
+        {
+            try
+            {
+                int ano = int.Parse(anoMes.Substring(0, 4)), mes = int.Parse(anoMes.Substring(4, 2));
+                string d1m = $"{ano:0000}{mes:00}01", d2 = $"{ano:0000}{mes:00}{DateTime.DaysInMonth(ano, mes):00}";
+                string d1a = $"{ano:0000}0101";
+                var ptpla = System.IO.Path.Combine(pasta, $"PTPLA{ano - 1}.DBF");
+                var plano = Contabil.Core.PlanoContas.Carregar(System.IO.Path.Combine(pasta, "placon.DBF"), ptpla);
+                var eng = new Contabil.Core.EngineSaldo(plano);
+                var movfin = System.IO.Path.Combine(pasta, "MOVFIN.DBF");
+                // exclui só o SIST_ABSOR do PRÓPRIO mês: as absorções de meses anteriores ficam
+                // (creditam o grupo e abatem o que já foi absorvido — comportamento do Clipper,
+                // onde o VAL2/VAL3 do PLACON vem do balancete que inclui tudo)
+                Func<string, string, bool> exclAbsor = (doc, data) =>
+                    doc == "SIST_ABSOR" && string.Compare(data, d1m, StringComparison.Ordinal) >= 0;
+                var apMes = eng.ApurarPeriodoComRollup(movfin, d1m, d2, exclAbsor);
+                var apAno = eng.ApurarPeriodoComRollup(movfin, d1a, d2, exclAbsor);
+
+                var absor = new MovfinGravador(pasta).LerPeriodo(d1m, d2, null)
+                    .Where(l => (l.Doc ?? "").Trim() == "SIST_ABSOR").ToList();
+                Console.WriteLine($"=== {absor.Count} lançamentos SIST_ABSOR em {anoMes} ===");
+                foreach (var l in absor.OrderBy(l => l.Credito))
+                {
+                    var grupo = (l.Credito ?? "").Trim();
+                    grupo = grupo.Length == 8 ? grupo.Substring(0, 5) + "000" : grupo;
+                    decimal vm = 0, va = 0;
+                    if (apMes.TryGetValue(grupo, out var am)) vm = decimal.Round(am.Val2 - am.Val3, 2);
+                    if (apAno.TryGetValue(grupo, out var aa)) va = decimal.Round(aa.Val2 - aa.Val3, 2);
+                    string casa = l.Valor == vm ? "=MÊS" : l.Valor == va ? "=ANO" : "≠ambos";
+                    Console.WriteLine($"  D={l.Debito} C={l.Credito} V={l.Valor,14:N2} | grupo {grupo}: mês={vm,14:N2} ano={va,14:N2}  {casa}");
+                }
+            }
+            catch (Exception ex) { Console.WriteLine("ERRO: " + ex.Message); }
+        }
+
+        /// <summary>Valida o MotorAbsorcao reproduzindo a absorção real de um mês (RELAC sintetizado dos próprios lançamentos).</summary>
+        public static void TestaMotorAbsorcao(string pasta, string anoMes)
+        {
+            try
+            {
+                int ano = int.Parse(anoMes.Substring(0, 4)), mes = int.Parse(anoMes.Substring(4, 2));
+                string d2 = $"{ano:0000}{mes:00}{DateTime.DaysInMonth(ano, mes):00}";
+                var plano = Contabil.Core.PlanoContas.Carregar(System.IO.Path.Combine(pasta, "placon.DBF"),
+                    System.IO.Path.Combine(pasta, $"PTPLA{ano - 1}.DBF"));
+                var eng = new Contabil.Core.EngineSaldo(plano);
+                Func<string, string, bool> excl = (doc, data) => doc == "SIST_ABSOR" && data == d2;
+                var ap = eng.ApurarPeriodoComRollup(System.IO.Path.Combine(pasta, "MOVFIN.DBF"), $"{ano:0000}0101", d2, excl);
+
+                var reais = new MovfinGravador(pasta).LerPeriodo(d2, d2, null)
+                    .Where(l => (l.Doc ?? "").Trim() == "SIST_ABSOR" && !(l.Debito ?? "").StartsWith("*")).ToList();
+                // sintetiza o RELAC: % = valor/totalDoGrupo (linha única = cheio, QUANT1=0)
+                var porGrupo = reais.GroupBy(l => l.Credito.Trim().Substring(0, 5)).ToDictionary(g => g.Key, g => g.Sum(x => x.Valor));
+                var relac = reais.Select(l => new Contabil.Core.LinhaRelac
+                {
+                    Debito = l.Debito.Trim(),
+                    Credito = l.Credito.Trim(),
+                    Quant1 = porGrupo[l.Credito.Trim().Substring(0, 5)] == l.Valor ? 0m
+                           : decimal.Round(l.Valor / porGrupo[l.Credito.Trim().Substring(0, 5)] * 100m, 0),
+                }).ToList();
+
+                var gerado = Contabil.Core.MotorAbsorcao.Gerar(relac,
+                    g => ap.TryGetValue(g, out var a) ? a.Val2 - a.Val3 : 0m, "1", "3");
+
+                int ok = 0, dif = 0;
+                for (int i = 0; i < Math.Min(reais.Count, gerado.Count); i++)
+                {
+                    bool igual = gerado[i].Debito == reais[i].Debito.Trim() && gerado[i].Credito == reais[i].Credito.Trim()
+                                 && gerado[i].Valor == reais[i].Valor;
+                    if (igual) ok++;
+                    else { dif++; Console.WriteLine($"  DIF: gerado D={gerado[i].Debito} C={gerado[i].Credito} V={gerado[i].Valor:N2} (q={gerado[i].Quant1}) | real V={reais[i].Valor:N2}"); }
+                }
+                Console.WriteLine($"Reais (ativos): {reais.Count} | gerados: {gerado.Count} | iguais: {ok} | diferentes: {dif}");
+                Console.WriteLine(ok == reais.Count && gerado.Count == reais.Count ? "MOTOR ABSORCAO OK" : "DIVERGÊNCIA!");
+            }
+            catch (Exception ex) { Console.WriteLine("ERRO: " + ex); }
+        }
+
         /// <summary>Testa o CRUD do CADCUSTO numa CÓPIA: lista, inclui dummy, altera, exclui, confere contagens.</summary>
         public static void TestaCadCusto(string pasta)
         {

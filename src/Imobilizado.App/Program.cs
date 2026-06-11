@@ -32,6 +32,7 @@ namespace Imobilizado.App
                 using (var f14 = new FrmCopiaMovfin()) { var _ = f14.Handle; }
                 using (var f15 = new FrmCadCusto()) { var _ = f15.Handle; }
                 using (var f16 = new FrmCadCustoItem(null, null)) { var _ = f16.Handle; }
+                using (var f17 = new FrmAbsorcao()) { var _ = f17.Handle; }
                 Console.WriteLine("SELFTEST OK");
                 return;
             }
@@ -118,6 +119,18 @@ namespace Imobilizado.App
             {
                 TesteComposto.DumpFolha(args[1], args.Length > 2 ? args[2] : "20260101", args.Length > 3 ? args[3] : "20260131",
                     args.Length > 4 ? args[4] : "SIST_RURAL NW");
+                return;
+            }
+
+            if (args.Length > 2 && args[0] == "--testmotorabsorcao")
+            {
+                TesteComposto.TestaMotorAbsorcao(args[1], args[2]);
+                return;
+            }
+
+            if (args.Length > 2 && args[0] == "--testabsorcao")
+            {
+                TesteComposto.TestaAbsorcao(args[1], args[2]);
                 return;
             }
 
