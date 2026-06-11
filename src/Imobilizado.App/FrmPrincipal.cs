@@ -40,21 +40,24 @@ namespace Imobilizado.App
             mArq.DropDownItems.Add(new ToolStripSeparator());
             It(mArq, "Sair", (s, e) => Close());
 
+            // Os módulos abrem NÃO-MODAIS (Show): o menu continua acessível e o usuário pode manter
+            // várias janelas abertas lado a lado p/ comparar (ex.: Exportar Lote + Lançamentos).
+            // Se o módulo já está aberto, só traz pra frente (não duplica).
             var mImob = M("&Imobilizado");
-            It(mImob, "Bens / Depreciação…", (s, e) => { using (var f = new FrmImobilizado()) f.ShowDialog(this); });
+            It(mImob, "Bens / Depreciação…", (s, e) => Abrir<FrmImobilizado>());
 
             var mCont = M("&Contabilidade");
-            It(mCont, "Lançamentos…", (s, e) => { using (var f = new FrmLancamentos()) f.ShowDialog(this); });
-            It(mCont, "Apropriações…", (s, e) => { using (var f = new FrmApropriacao()) f.ShowDialog(this); });
-            It(mCont, "Plano de Contas…", (s, e) => { using (var f = new FrmPlacon()) f.ShowDialog(this); });
-            It(mCont, "Balancete…", (s, e) => { using (var f = new FrmBalancete()) f.ShowDialog(this); });
+            It(mCont, "Lançamentos…", (s, e) => Abrir<FrmLancamentos>());
+            It(mCont, "Apropriações…", (s, e) => Abrir<FrmApropriacao>());
+            It(mCont, "Plano de Contas…", (s, e) => Abrir<FrmPlacon>());
+            It(mCont, "Balancete…", (s, e) => Abrir<FrmBalancete>());
 
             var mAlter = M("&AlterData");
-            It(mAlter, "Exportar Lote…", (s, e) => { using (var f = new FrmExportaAlterData()) f.ShowDialog(this); });
-            It(mAlter, "Importar RELACIONA (planilha PESQUISA)…", (s, e) => { using (var f = new FrmImportaRelaciona()) f.ShowDialog(this); });
+            It(mAlter, "Exportar Lote…", (s, e) => Abrir<FrmExportaAlterData>());
+            It(mAlter, "Importar RELACIONA (planilha PESQUISA)…", (s, e) => Abrir<FrmImportaRelaciona>());
 
             var mUtil = M("&Utilitários");
-            It(mUtil, "Copiar MOVFIN por período…", (s, e) => { using (var f = new FrmCopiaMovfin()) f.ShowDialog(this); });
+            It(mUtil, "Copiar MOVFIN por período…", (s, e) => Abrir<FrmCopiaMovfin>());
 
             // painel central com a pasta de dados em uso (informativo)
             var centro = new Label
@@ -83,6 +86,21 @@ namespace Imobilizado.App
             centro.Text = string.IsNullOrWhiteSpace(p)
                 ? "Nenhuma pasta de dados configurada.\nUse Arquivo → Escolher pasta de dados…"
                 : $"Pasta de dados:\n{p}";
+        }
+
+        /// <summary>Abre um módulo NÃO-modal; se já existe uma janela desse tipo, só a traz pra frente.</summary>
+        private void Abrir<T>() where T : Form, new()
+        {
+            foreach (Form f in Application.OpenForms)
+                if (f is T)
+                {
+                    if (f.WindowState == FormWindowState.Minimized) f.WindowState = FormWindowState.Normal;
+                    f.BringToFront();
+                    f.Activate();
+                    return;
+                }
+            var nf = new T();
+            nf.Show(this);   // não-modal, com owner: fica acima da principal, fecha junto com o app
         }
 
         private void EscolherPasta()
